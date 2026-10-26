@@ -234,6 +234,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean dockRow;
     /** config single_row: every app in the dock's row, scrolling sideways, no grid below. */
     private boolean singleRow;
+    /** config strip_row: the dock in a row of its own, every other app in one sideways row of smaller tiles under it. */
+    private boolean stripRow;
     /** The highlight springs past its target (config.xml, focus_overshoot); false goes straight there. */
     private boolean focusOvershoot;
     /** Festive skin from the theme (see Festival); applied while it is active today. */
@@ -406,6 +408,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         reducedMotion = cfg.reducedMotion;
         dockRow = cfg.dockRow;
         singleRow = cfg.singleRow;
+        stripRow = cfg.stripRow;
         focusOvershoot = cfg.focusOvershoot;
         festival = cfg.festival;
         festive = festival.active(LocalDate.now());
@@ -574,6 +577,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ((GridLayoutManager) grid.getLayoutManager()).setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
             @Override public int getSpanSize(int position) { return !singleRow && adapter != null && adapter.isLibraryAt(position) ? COLUMNS : 1; }
         });
+        // strip_row: the dock keeps COLUMNS big tiles in a row of its own and the rest go into one sideways row of
+        // smaller tiles under it, which a grid cannot lay out; the same adapter, glass and dock band serve it.
+        if (stripRow) {
+            grid.setLayoutManager(new StripLayoutManager(this, COLUMNS, cfg.stripColumns,
+                    () -> animations && !reducedMotion));
+        }
         grid.setHasFixedSize(true);
         grid.setItemAnimator(null);
         // Tiles that scroll out while one is carried come back from the view cache without a rebind; set their
@@ -613,14 +622,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             int tileW = AppAdapter.tileWidthPx(inner, h, COLUMNS, rowsBelowDock, cfg.dockTitle, cfg.dockRow, density);
             int itemH = AppAdapter.itemHeightPx(AppAdapter.tileHeightPx(tileW), density);
             int dockRow = itemH + (int) (AppAdapter.DOCK_EXTRA_DP * density);   // item height plus DockDecoration offsets
-            int gridRows = itemH * rowsBelowDock;
+            // strip_row: one row of the strip's smaller tiles under the dock, whatever rows_below_dock says.
+            int gridRows = stripRow ? AppAdapter.itemHeightPx(AppAdapter.tileHeightPx(
+                    AppAdapter.tileWidthPx(inner, cfg.stripColumns, density)), density) : itemH * rowsBelowDock;
             // Keep the hero below the header when the library is enabled on a short screen,
             // even when the theme requests an extra visible row below the dock.
             int shelfClearance = cfg.appLibrary ? hero.getMeasuredHeight() + (int) (40 * density) : 0;
             int want = Math.max(shelfClearance, h - dockRow - gridRows - (int) (AppAdapter.BOTTOM_ROOM_DP * density));
             // Where the rows cannot fit even at the smallest tile (3 rows with the title on), the title keeps its
             // room above the dock and the last rows run off the bottom instead of the title drawing over the clock.
-            if (MainActivity.this.dockRow && cfg.dockTitle && rowsBelowDock > 0) want = Math.max(want, (int) (AppAdapter.TITLE_ROOM_DP * density));
+            if (MainActivity.this.dockRow && cfg.dockTitle && (rowsBelowDock > 0 || stripRow)) want = Math.max(want, (int) (AppAdapter.TITLE_ROOM_DP * density));
             // No dock to push down: the grid starts at the top, with room for the first row's zoom and glass.
             if (!MainActivity.this.dockRow) want = (int) (AppAdapter.TOP_ROOM_DP * density);
             // A single row never shows the names under its tiles (the title above the row names the app), so the
@@ -632,7 +643,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 // row cannot scroll vertically, and the layout request made from inside this layout pass is
                 // dropped, so lay the row out again on the next frame. The glass and the title were placed for the
                 // old position, so fit them again once it has moved.
-                if (singleRow) grid.post(() -> {
+                if (singleRow || stripRow) grid.post(() -> {
                     grid.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
                         @Override
                         public void onGlobalLayout() {
@@ -1530,6 +1541,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // rtl_app_grid (Hebrew) mirrors the grid: position 0 is on the right, so Left moves towards the end.
         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) to = rtlAppGrid ? from + 1 : from - 1;
         else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) to = rtlAppGrid ? from - 1 : from + 1;
+        // strip_row: two rows of different widths. Up carries a strip tile into the dock's last place and Down a dock
+        // tile to the strip's start; the tile on the other side of the edge shifts over to make room.
+        else if (stripRow) to = keyCode == KeyEvent.KEYCODE_DPAD_UP ? Math.min(from, COLUMNS - 1) : Math.max(from, COLUMNS);
         else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) to = from - COLUMNS;
         else if (from + COLUMNS < n) to = from + COLUMNS;
         else to = from / COLUMNS < (n - 1) / COLUMNS ? n - 1 : from;
@@ -1548,6 +1562,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * afterwards if the moved tile itself ends up off screen.
      */
     private void keepScroll(Runnable change) {
+        if (!(grid.getLayoutManager() instanceof GridLayoutManager)) {
+            // strip_row: the strip keeps its own offset across a layout, and the dock row never scrolls.
+            change.run();
+            return;
+        }
         GridLayoutManager lm = (GridLayoutManager) grid.getLayoutManager();
         int first = lm.findFirstVisibleItemPosition();
         View firstView = first != RecyclerView.NO_POSITION ? lm.findViewByPosition(first) : null;
@@ -2252,6 +2271,33 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
             return !forward && position == 0;
         }
+        if (stripRow) {
+            // Two rows of different widths: Left/Right walk the row the tile is in and stop at its ends (the strip
+            // scrolls to bring the next tile in), Up leaves the dock for the top bar, and Up from the strip or Down
+            // from the dock goes to the nearest tile on screen in the other row. Laid out left to right only.
+            boolean inDock = position < COLUMNS;
+            int dockEnd = Math.min(count, adapter.dockFilled());
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                boolean forward = keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
+                int next = position + (forward ? 1 : -1);
+                if (next < (inDock ? 0 : COLUMNS) || next >= (inDock ? dockEnd : count)) return true;
+                focusTile(next);
+                grid.playSoundEffect(forward ? SoundEffectConstants.NAVIGATION_RIGHT : SoundEffectConstants.NAVIGATION_LEFT);
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                if (inDock) return false;
+                target = nearestOnScreen(position, 0, dockEnd);
+            } else {
+                if (!inDock) return true;
+                target = nearestOnScreen(position, COLUMNS, count);
+            }
+            if (target < 0) return true;
+            focusTile(target);
+            grid.playSoundEffect(keyCode == KeyEvent.KEYCODE_DPAD_UP
+                    ? SoundEffectConstants.NAVIGATION_UP : SoundEffectConstants.NAVIGATION_DOWN);
+            return true;
+        }
         // Horizontal: swallow the key at a row's ends so focus never wraps to the next row or
         // escapes up into the top bar. Mid-row moves fall through to the default focus search.
         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
@@ -2281,6 +2327,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.playSoundEffect(keyCode == KeyEvent.KEYCODE_DPAD_UP
                 ? SoundEffectConstants.NAVIGATION_UP : SoundEffectConstants.NAVIGATION_DOWN);
         return true;
+    }
+
+    /**
+     * strip_row: of the tiles at positions [start, end), the one whose centre is nearest the tile at from's centre,
+     * leaving out strip tiles scrolled off screen; -1 when none is laid out.
+     */
+    private int nearestOnScreen(int from, int start, int end) {
+        RecyclerView.ViewHolder origin = grid.findViewHolderForAdapterPosition(from);
+        if (origin == null) return start < end ? start : -1;
+        float centre = (origin.itemView.getLeft() + origin.itemView.getRight()) / 2f;
+        int best = -1;
+        float bestDistance = Float.MAX_VALUE;
+        for (int p = start; p < end; p++) {
+            RecyclerView.ViewHolder vh = grid.findViewHolderForAdapterPosition(p);
+            if (vh == null) continue;
+            View item = vh.itemView;
+            if (item.getRight() <= grid.getPaddingLeft() || item.getLeft() >= grid.getWidth() - grid.getPaddingRight()) continue;
+            float distance = Math.abs((item.getLeft() + item.getRight()) / 2f - centre);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = p;
+            }
+        }
+        return best;
     }
 
     @Override public void onLibraryFocused() {
