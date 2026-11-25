@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 16:9 banner: an episode list with the newest one lit. Own art. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp" android:height="180dp"
+    android:viewportWidth="320" android:viewportHeight="180">
+    <path android:fillColor="#0E1620" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#7FD4FF" android:pathData="M104,62m-8,0a8,8 0 1 1 16,0a8,8 0 1 1 -16,0" />
+    <path android:fillColor="#4DFFFFFF" android:pathData="M104,90m-8,0a8,8 0 1 1 16,0a8,8 0 1 1 -16,0" />
+    <path android:fillColor="#4DFFFFFF" android:pathData="M104,118m-8,0a8,8 0 1 1 16,0a8,8 0 1 1 -16,0" />
+    <path android:fillColor="#00000000" android:strokeColor="#F2FFFFFF" android:strokeWidth="10"
+        android:strokeLineCap="round" android:pathData="M132,62H232" />
+    <path android:fillColor="#00000000" android:strokeColor="#80FFFFFF" android:strokeWidth="10"
+        android:strokeLineCap="round" android:pathData="M132,90H214" />
+    <path android:fillColor="#00000000" android:strokeColor="#80FFFFFF" android:strokeWidth="10"
+        android:strokeLineCap="round" android:pathData="M132,118H196" />
+</vector>

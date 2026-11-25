@@ -5,6 +5,9 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.TransitionDrawable;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -44,8 +47,21 @@ final class WallpaperPlayer {
     /** config wallpaper_true_color: ARGB_8888 instead of RGB_565. */
     private final Bitmap.Config bitmapConfig;
     private final int height;
-    /** wallpaper_dim as an ARGB black, painted into each picture once instead of a full-screen shade view. */
-    private final int dimColor;
+    /**
+     * wallpaper_dim as an ARGB black, painted into each picture once instead of a full-screen shade view. A new
+     * daily_wallpaper picture brings its own.
+     */
+    private int dimColor;
+    /** daily_wallpaper: the Daily Wallpaper app's picture is Home's wallpaper; its caption sits at the bottom right. */
+    private final boolean daily;
+    private final TextView dailyCaption;
+    /** The caption of the daily picture being shown, or about to be. */
+    private String dailyText;
+    /** The next picture fades in over the old one (a new daily picture) instead of replacing it at once. */
+    private boolean fadeNext;
+    /** Animations on and reduced motion off: a new daily picture fades in. */
+    private final boolean fades;
+    private static final int FADE_MS = 500;
     /** The picture on screen, released once the next one has been drawn. */
     private Bitmap current;
     private boolean active;
@@ -91,11 +107,33 @@ final class WallpaperPlayer {
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
-        if (config.wallpaperEnabled && !files.isEmpty()) {
+        daily = config.dailyWallpaper;
+        fades = config.animations && !config.reducedMotion;
+        dailyText = config.dailyCaption;
+        dailyCaption = daily ? makeDailyCaption(context, root) : null;
+        boolean pictures = config.wallpaperEnabled && !files.isEmpty();
+        // daily_wallpaper without a picture yet: the view waits for the first one, which fades in.
+        if (pictures || daily) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            showFirst();
         }
+        if (pictures) showFirst();
+        if (config.dailyPicture != null && config.dailyPicture.getName().equals(displayed)) showDailyCaption(false);
+    }
+
+    /**
+     * daily_wallpaper: the app has a new picture (or a new dim or caption for this one). It replaces whatever shows,
+     * fading in over it unless motion is reduced; while Home is hidden it shows on the next return.
+     */
+    void showDaily(DailyWallpaper.Picture picture) {
+        if (closed || !daily) return;
+        files.clear();
+        files.add(picture.file);
+        dimColor = picture.dim > 0 ? (picture.dim * 255 / 100) << 24 : 0;
+        dailyText = picture.caption;
+        fadeNext = true;
+        displayed = "";   // decode again even for the same file: its dim may have changed
+        update();
     }
 
     /**
@@ -195,6 +233,7 @@ final class WallpaperPlayer {
                 show(bitmap);
                 displayed = next.getName();
                 showCaption(true);
+                if (daily) showDailyCaption(true);
                 if (!displayed.equals(previous) || changed == 0) {
                     preferences.edit().putString("image", displayed)
                             .putLong("changed", System.currentTimeMillis()).apply();
@@ -252,6 +291,54 @@ final class WallpaperPlayer {
         }).start();
     }
 
+    /**
+     * daily_wallpaper's caption: one small grey line at the bottom right, in the band under the last row of tiles
+     * (strip_row leaves it empty), never focusable.
+     */
+    private static TextView makeDailyCaption(Context context, FrameLayout root) {
+        float dp = context.getResources().getDisplayMetrics().density;
+        TextView text = new TextView(context);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        text.setTextColor(0xB3FFFFFF);
+        text.setShadowLayer(5 * dp, 0, dp, 0xCC000000);
+        text.setSingleLine(true);
+        text.setEllipsize(TextUtils.TruncateAt.END);
+        text.setMaxWidth(Math.round(720 * dp));
+        text.setFocusable(false);
+        text.setAlpha(0f);
+        try {
+            text.setTypeface(UiFont.get(context, R.string.font_regular));
+        } catch (Exception ignored) {
+            // the system font is fine
+        }
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.END);
+        params.bottomMargin = Math.round(22 * dp);
+        params.setMarginEnd(Math.round(62 * dp));
+        root.addView(text, params);
+        return text;
+    }
+
+    /** The daily picture's caption, faded across a change like the picture; an empty one hides the line. */
+    private void showDailyCaption(boolean fade) {
+        if (dailyCaption == null) return;
+        String text = dailyText == null ? "" : dailyText;
+        dailyCaption.animate().cancel();
+        if (text.isEmpty()) {
+            dailyCaption.setAlpha(0f);
+            return;
+        }
+        if (!fade || !fades || dailyCaption.getAlpha() == 0f) {
+            dailyCaption.setText(text);
+            dailyCaption.setAlpha(1f);
+            return;
+        }
+        dailyCaption.animate().alpha(0f).setDuration(FADE_MS / 2).withEndAction(() -> {
+            dailyCaption.setText(text);
+            dailyCaption.animate().alpha(1f).setDuration(FADE_MS / 2).start();
+        }).start();
+    }
+
     /** Names plus sizes: enough to notice a different collection without hashing every image. */
     private static String collectionKey(List<File> images) {
         StringBuilder key = new StringBuilder();
@@ -259,12 +346,41 @@ final class WallpaperPlayer {
         return key.toString();
     }
 
-    /** Puts a picture on screen and releases the previous one after a frame has drawn the new one. */
+    /**
+     * Puts a picture on screen and releases the previous one after a frame has drawn the new one. A new daily picture
+     * fades in over the old one first; both are in memory for those half a second.
+     */
     private void show(Bitmap bitmap) {
         Bitmap old = current;
         current = bitmap;
+        boolean fadeIn = fadeNext && fades;
+        boolean fade = fadeIn && old != null && old != bitmap;
+        fadeNext = false;
+        if (old == null && fadeIn) {
+            // The first daily picture, over the plain background colour, which goes once the picture covers it.
+            image.setImageBitmap(bitmap);
+            image.setAlpha(0f);
+            image.animate().alpha(1f).setDuration(FADE_MS).withEndAction(() -> {
+                if (current == bitmap) root.setBackground(null);
+            }).start();
+            return;
+        }
         // The wallpaper covers the whole root; avoid drawing the fallback colour under it.
         root.setBackground(null);
+        if (fade) {
+            TransitionDrawable blend = new TransitionDrawable(new Drawable[]{
+                    new BitmapDrawable(image.getResources(), old), new BitmapDrawable(image.getResources(), bitmap)});
+            blend.setCrossFadeEnabled(true);
+            image.setImageDrawable(blend);
+            blend.startTransition(FADE_MS);
+            image.postDelayed(() -> {
+                if (current == bitmap) image.setImageBitmap(bitmap);
+                image.postDelayed(old::recycle, 500);
+            }, FADE_MS + 50);
+            return;
+        }
+        image.animate().cancel();
+        image.setAlpha(1f);
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
     }

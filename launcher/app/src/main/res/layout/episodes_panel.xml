@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- episodes_panel: the NEW EPISODES list at the top right, above the dock. Added to root in code, only when the
+     switch is on. Its rows are filled by EpisodesPanel from the New Episodes app's snapshot. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/episodesPanel"
+    android:layout_width="374dp"
+    android:layout_height="wrap_content"
+    android:layout_gravity="top|right"
+    android:layout_marginTop="111dp"
+    android:layout_marginRight="48dp"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:id="@+id/episodesHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingBottom="5dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@string/font_medium"
+            android:includeFontPadding="false"
+            android:letterSpacing="0.24"
+            android:singleLine="true"
+            android:text="NEW EPISODES"
+            android:textColor="#9EFFFFFF"
+            android:textSize="11sp"
+            tools:ignore="HardcodedText" />
+
+        <!-- The refresh loader goes here (EpisodesPanel.Spinner), shown only while a refresh is slow or retrying. -->
+        <FrameLayout
+            android:id="@+id/episodesSpinner"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginLeft="9dp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:background="#1AFFFFFF" />
+
+    <LinearLayout
+        android:id="@+id/episodesRows"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="vertical" />
+</LinearLayout>

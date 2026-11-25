@@ -65,6 +65,11 @@
         <package android:name="com.xiaomi.mitv.settings" />
         <package android:name="com.tcl.settings" />
         <package android:name="com.amazon.tv.launcher" />
+        <!-- episodes_panel: the New Episodes app's list, and Stremio, which opens an episode from it. -->
+        <package android:name="local.newepisodes" />
+        <package android:name="com.stremio.one" />
+        <!-- daily_wallpaper: the Daily Wallpaper app's picture of the day. -->
+        <package android:name="local.dailywallpaper" />
         <!-- Coocaa OS sources for the Inputs menu (coocaa_sources); see CoocaaSources. -->
         <provider android:authorities="com.skyworth.tv.provider" />
         <provider android:authorities="com.skyworth.tv.sdk.provider" />

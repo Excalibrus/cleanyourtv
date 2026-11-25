@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF0E1217"
+    android:paddingStart="64dp"
+    android:paddingTop="44dp"
+    android:paddingEnd="64dp"
+    android:paddingBottom="36dp">
+
+    <!-- Signed out: Stremio's link login, a code approved on the person's phone. -->
+    <LinearLayout
+        android:id="@+id/signin"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="48dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView style="@style/Title" android:text="@string/app_name" />
+
+            <TextView
+                android:id="@+id/signinIntro"
+                style="@style/Body"
+                android:layout_marginTop="10dp"
+                android:text="@string/signin_intro" />
+
+            <TextView
+                style="@style/Body"
+                android:layout_marginTop="32dp"
+                android:text="@string/signin_open" />
+
+            <TextView
+                android:id="@+id/link"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#FFFFFFFF"
+                android:textSize="26sp" />
+
+            <TextView
+                style="@style/Body"
+                android:layout_marginTop="20dp"
+                android:text="@string/signin_code" />
+
+            <TextView
+                android:id="@+id/code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.2"
+                android:textColor="#FF7FD4FF"
+                android:textSize="60sp" />
+
+            <TextView
+                android:id="@+id/signinStatus"
+                style="@style/Small"
+                android:layout_marginTop="8dp" />
+
+            <Button
+                android:id="@+id/newCode"
+                style="@style/Action"
+                android:layout_marginTop="24dp"
+                android:text="@string/new_code" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/qr"
+            android:layout_width="260dp"
+            android:layout_height="260dp"
+            android:background="#FFFFFFFF"
+            android:contentDescription="@string/qr_description"
+            android:padding="14dp"
+            android:scaleType="fitCenter" />
+    </LinearLayout>
+
+    <!-- Signed in: the picker on the left, the list the panel shows on the right. -->
+    <LinearLayout
+        android:id="@+id/home"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="56dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView style="@style/Title" android:text="@string/app_name" />
+
+            <TextView
+                style="@style/Label"
+                android:layout_marginTop="20dp"
+                android:text="@string/series_label" />
+
+            <TextView
+                style="@style/Small"
+                android:layout_marginTop="4dp"
+                android:text="@string/series_hint" />
+
+            <ListView
+                android:id="@+id/series"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="10dp"
+                android:layout_weight="1"
+                android:choiceMode="multipleChoice"
+                android:divider="@null"
+                android:nextFocusRight="@+id/refresh" />
+
+            <TextView
+                android:id="@+id/libraryEmpty"
+                style="@style/Body"
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="440dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/Label"
+                android:layout_marginTop="58dp"
+                android:text="@string/rows_label" />
+
+            <TextView
+                android:id="@+id/status"
+                style="@style/Small"
+                android:layout_marginTop="4dp" />
+
+            <LinearLayout
+                android:id="@+id/rows"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/refresh"
+                    style="@style/Action"
+                    android:nextFocusLeft="@id/series"
+                    android:text="@string/refresh" />
+
+                <Button
+                    android:id="@+id/signOut"
+                    style="@style/Action"
+                    android:layout_marginStart="14dp"
+                    android:text="@string/sign_out" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

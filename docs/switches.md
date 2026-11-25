@@ -54,3 +54,7 @@ fits the rules; keys from before the rule sit on its wanted list until a screens
 | `home_long_press_home` | <img src="switches/home_long_press_home.jpg" width="320" alt="home_long_press_home on a TV"> |
 | `vpn_pill` | <img src="switches/vpn_pill.jpg" width="320" alt="vpn_pill on a TV"> |
 | `power_on_home_always` | <img src="switches/power_on_home_always.jpg" width="320" alt="power_on_home_always on a TV"> |
+| `strip_row` | <img src="../addons/new-episodes/screenshot.jpg" width="320" alt="strip_row on a TV"> |
+| `strip_columns` | <img src="../addons/new-episodes/screenshot.jpg" width="320" alt="strip_columns on a TV"> |
+| `episodes_panel` | <img src="../addons/new-episodes/screenshot.jpg" width="320" alt="episodes_panel on a TV"> |
+| `daily_wallpaper` | <img src="../addons/daily-wallpaper/screenshot.jpg" width="320" alt="daily_wallpaper on a TV"> |

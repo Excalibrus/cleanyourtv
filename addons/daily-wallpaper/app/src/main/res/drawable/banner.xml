@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 16:9 banner: a sun over two hills. Own art. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp" android:height="180dp"
+    android:viewportWidth="320" android:viewportHeight="180">
+    <path android:fillColor="#13233A" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#F2C14E" android:pathData="M206,70m-22,0a22,22 0 1 1 44,0a22,22 0 1 1 -44,0" />
+    <path android:fillColor="#2E4A6B" android:pathData="M0,124L70,76L128,112L190,64L264,118L320,90V180H0Z" />
+    <path android:fillColor="#0B1524" android:pathData="M0,150C60,124 120,122 176,140C228,156 276,150 320,132V180H0Z" />
+</vector>

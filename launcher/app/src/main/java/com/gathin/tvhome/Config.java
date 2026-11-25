@@ -260,6 +260,14 @@ final class Config {
     final boolean stripRow;
     /** How many of those smaller tiles fit across the screen (config.xml, strip_columns). */
     final int stripColumns;
+    /** The NEW EPISODES panel top right, filled by the New Episodes app (config.xml, episodes_panel). */
+    final boolean episodesPanel;
+    /** daily_wallpaper on and no Wallpaper pick on the TV: the Daily Wallpaper app's picture is Home's wallpaper. */
+    final boolean dailyWallpaper;
+    /** That picture's copy on this TV, already in {@link #wallpapers}; null before the first one. */
+    final File dailyPicture;
+    /** Its caption for the line at the bottom right; empty without a picture. */
+    final String dailyCaption;
 
     private Config(List<String> dockApps, boolean fillDock, List<String> hiddenApps, List<String> libraryApps, String liveTvPackage,
                    String liveTvAction, String liveTvInputId, Map<String, String> launchActions, Map<String, String> appLabels,
@@ -274,7 +282,8 @@ final class Config {
                    List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, boolean appGlow, boolean fadeRows, int homeIdleClockMinutes,
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
                    boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
-                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean stripRow, int stripColumns) {
+                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean stripRow, int stripColumns, boolean episodesPanel,
+                   boolean dailyWallpaper, File dailyPicture, String dailyCaption) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
@@ -380,6 +389,10 @@ final class Config {
         this.dockBandAll = dockBandAll;
         this.stripRow = stripRow;
         this.stripColumns = stripColumns;
+        this.episodesPanel = episodesPanel;
+        this.dailyWallpaper = dailyWallpaper;
+        this.dailyPicture = dailyPicture;
+        this.dailyCaption = dailyCaption;
         this.glowStyle = glowStyle(glowStyle);
         this.wallpaperCaptions = wallpaperCaptions;
         this.glassStyle = glassStyle(glassStyle);
@@ -503,6 +516,8 @@ final class Config {
         boolean dockBandAll = res.getBoolean(R.bool.dock_band_all);
         boolean stripRow = res.getBoolean(R.bool.strip_row);
         int stripColumns = res.getInteger(R.integer.strip_columns);
+        boolean episodesPanel = res.getBoolean(R.bool.episodes_panel);
+        boolean dailyWallpaper = res.getBoolean(R.bool.daily_wallpaper);
         boolean applied = false;
 
         File dir = dir(ctx);
@@ -608,6 +623,8 @@ final class Config {
             dockBandAll = bool(json, "dock_band_all", dockBandAll);
             stripRow = bool(json, "strip_row", stripRow);
             stripColumns = integer(json, "strip_columns", stripColumns, 2, 8);
+            episodesPanel = bool(json, "episodes_panel", episodesPanel);
+            dailyWallpaper = bool(json, "daily_wallpaper", dailyWallpaper);
             glowStyle = string(json, "glow_style", glowStyle);
             glassStyle = string(json, "glass_style", glassStyle);
         }
@@ -653,6 +670,19 @@ final class Config {
             wallpaper = chosen.isEmpty() ? null : chosen.get(0);
             wallpaperEnabled = !chosen.isEmpty();
         }
+        // daily_wallpaper: the Daily Wallpaper app's picture takes the theme's place, one picture with its own dim and
+        // no rotation; a Wallpaper pick on the TV still wins, and before the first picture the theme's stays.
+        boolean daily = dailyWallpaper && chosen == null;
+        DailyWallpaper.Picture dailyPicture = daily ? DailyWallpaper.local(ctx) : null;
+        if (dailyPicture != null) {
+            wallpapers.clear();
+            wallpapers.add(dailyPicture.file);
+            wallpaper = dailyPicture.file;
+            wallpaperEnabled = true;
+            rotationMinutes = 0;
+            wallpaperDim = dailyPicture.dim;
+            wallpaperMoods = Collections.emptyMap();
+        }
         // A festive skin comes only from a theme; config.xml has no festival.
         Festival festival = json == null ? Festival.NONE : Festival.parse(string(json, "festival", ""),
                 string(json, "festival_until", ""), string(json, "greeting", ""), string(json, "accent_color", ""));
@@ -671,7 +701,8 @@ final class Config {
                 consumeVolumeKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
                 dateBelowClock, vpnPill, locale, powerOnHomeAlways,
-                stripRow && dockRow && !singleRow, Math.max(2, Math.min(8, stripColumns)));
+                stripRow && dockRow && !singleRow, Math.max(2, Math.min(8, stripColumns)), episodesPanel && dockRow,
+                daily, dailyPicture == null ? null : dailyPicture.file, dailyPicture == null ? "" : dailyPicture.caption);
     }
 
     /**

@@ -286,6 +286,18 @@
          (this TV: on); a theme can set "strip_row" and "strip_columns". -->
     <bool name="strip_row">true</bool>
     <integer name="strip_columns">6</integer>
+    <!-- A NEW EPISODES panel at the top right, above the dock: the followed series' new, unwatched episodes, filled
+         by the New Episodes app (package local.newepisodes, which must be signed with the same key as this launcher).
+         Up from the dock goes to its rows; OK opens the episode in Stremio. With the app missing or not set up it shows
+         one "Set up new episodes" row. Needs dock_row. Off by default (this TV: on); a theme can set "episodes_panel". -->
+    <bool name="episodes_panel">true</bool>
+    <!-- Bing's picture of the day (UK edition) as Home's wallpaper, from the Daily Wallpaper app (package
+         local.dailywallpaper, signed with the same key as this launcher), which downloads it: this launcher stays
+         without internet. It replaces the theme's pictures, darkened by the app's measure of how bright it is, with
+         its caption in one small line at the bottom right; a new picture fades in, even while Home is showing. A
+         Wallpaper pick in Launcher settings still wins; before the first picture the theme's stays. The clock
+         screensaver's clock_wallpaper shows it too. Off by default (this TV: on); a theme can set "daily_wallpaper". -->
+    <bool name="daily_wallpaper">true</bool>
     <!-- The dock band's padding equals the gap between its tiles on all four sides (as far as the grid's edges leave room),
          so its corners are concentric with the tiles' and the spacing reads even. false (the default) keeps the fixed
          14dp above and below, up to 22dp at the sides and 26dp corners. Can also be set with "dock_even_padding": true in a theme's config.json. -->

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Daily Wallpaper</string>
+    <string name="refresh">Refresh</string>
+    <string name="no_picture">No picture yet</string>
+    <string name="status_checking">Checking Bing…</string>
+    <string name="status_first">Getting today\'s picture from Bing…</string>
+    <string name="status_ok">Bing picture of the day, UK edition. Checked at %1$s; next check %2$s.</string>
+    <string name="status_failed_kept">Couldn\'t check for a new picture (%1$s). This one stays; trying again %2$s.</string>
+    <string name="status_failed_none">Couldn\'t get a picture (%1$s). Trying again %2$s.</string>
+    <string name="today_at">at %1$s</string>
+    <string name="tomorrow_at">tomorrow at %1$s</string>
+</resources>

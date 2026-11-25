@@ -17,6 +17,7 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.ChangedPackages;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
+import android.database.ContentObserver;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -90,6 +91,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid, and one glass highlight that springs between tiles.
@@ -140,6 +144,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private RecyclerView grid;
     private FrameLayout root;
     private WallpaperPlayer wallpaperPlayer;
+    /** daily_wallpaper: copies the Daily Wallpaper app's new picture off the main thread; null with the switch off. */
+    private ExecutorService dailyIo;
+    private ContentObserver dailyObserver;
     private GlassView glass;
     private View ambient;
     private TextView heroName;
@@ -192,6 +199,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private TextView stats;
     private List<RaceWeekend.Race> raceCalendar;
     private View racePanel;
+    /** episodes_panel: the NEW EPISODES list top right, filled by the New Episodes app; null when the switch is off. */
+    private EpisodesPanel episodes;
+    /** Where showHero last anchored the title (the dock tiles' top, in root coordinates). */
+    private float heroDockTop = -1;
     private TextView raceKicker, raceHeadline, raceSessions;
     /** config.xml show_stats, overridable by a theme. Off: the line is gone and nothing is read. */
     private boolean showStats;
@@ -374,6 +385,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         public void run() {
             updateGreeting();
             updateRace();
+            if (episodes != null) episodes.onMinute();
             // The pill follows the network callbacks and each return to Home; only the diya's flame follows the
             // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
             if (festive) updateWifiLabel();
@@ -435,6 +447,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // the theme's background, so launch looks the same.
         getWindow().setBackgroundDrawable(null);
         wallpaperPlayer = new WallpaperPlayer(this, root, cfg);
+        if (cfg.dailyWallpaper) setUpDailyWallpaper();
         sky = findViewById(R.id.sky);
         sky.setIntensity(cfg.skyIntensity);
         glass = findViewById(R.id.glass);
@@ -661,6 +674,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // padding, leaving the glass at the XML design size until a key is pressed.
             grid.post(this::refitGlass);
         });
+        if (cfg.episodesPanel) setUpEpisodesPanel(cfg.dailyWallpaper);
 
         // Keep the glass glued to its tile while the grid scrolls.
         grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -794,7 +808,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return true;
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 // Back to the dock tile Up came from, not wherever the focus finder lands.
-                focusTile(singleRow ? lastFocused : lastFocused % COLUMNS);
+                int tile = singleRow ? lastFocused : lastFocused % COLUMNS;
+                // The NEW EPISODES panel sits between the top bar and the dock: its top row comes first.
+                if (episodes != null && !reordering && episodes.focusFromTopBar(tile)) {
+                    v.playSoundEffect(SoundEffectConstants.NAVIGATION_DOWN);
+                    return true;
+                }
+                focusTile(tile);
                 return true;
             }
             int firstButton = btnInputs.getVisibility() == View.VISIBLE ? R.id.btnInputs : firstTopButton().getId();
@@ -825,6 +845,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
             boolean onTile = newF != null && newF.getId() == R.id.card;
             if (!onTile) hideGlass();
+            if (episodes != null) episodes.onFocusChanged(oldF, newF);
         });
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -982,6 +1003,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (openLiveTvAfterBoot()) return;
         updateGreeting();
         updateRace();
+        if (episodes != null) episodes.onResume();
         // The network and Inputs pills keep their state while Home is in the background, and callbacks update them
         // when the network or the inputs change, so this refresh only catches anything missed. Its binder calls
         // (about 7 ms on a TCL C755, most of it WifiManager.getConnectionInfo) would hold up the first frame back
@@ -996,6 +1018,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (showStats) startStats();
         sky.update();
         wallpaperPlayer.start();
+        if (dailyObserver != null) {
+            getContentResolver().registerContentObserver(DailyWallpaper.state(), false, dailyObserver);
+            syncDaily("home");
+        }
         handler.postDelayed(minuteTick, MINUTE_MS);
         if (festive && diya != null) {
             diya.start();
@@ -1165,11 +1191,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         root.removeCallbacks(showIdleClock);
         endReorder();   // Home or another app while reordering keeps the order so far
         wallpaperPlayer.stop();
+        if (dailyObserver != null) getContentResolver().unregisterContentObserver(dailyObserver);
         stopAmbientAnimation();
         hero.animate().cancel();
         ambient.animate().cancel();
         heroArt.animate().cancel();
         handler.removeCallbacks(minuteTick);
+        if (episodes != null) episodes.onPause();
         stopStats();
         if (diya != null) diya.stop();
         cancelPendingFocusScroll();
@@ -1226,6 +1254,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onDestroy();
         unregisterReceiver(packageReceiver);
         wallpaperPlayer.close();
+        if (dailyIo != null) dailyIo.shutdownNow();
+        if (episodes != null) episodes.onDestroy();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.unregisterCallback(inputCallback);
@@ -1742,6 +1772,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     // ---- top shelf -------------------------------------------------------------------------------
 
     private void showHero(int position, float dockTopInRoot) {
+        heroDockTop = dockTopInRoot;
         String label = adapter.labelAt(position);
         int color = adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
@@ -2252,6 +2283,133 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 : res.getString(R.string.storage_gb_decimal, gb);
     }
 
+    // ---- episodes panel (config.xml episodes_panel) -------------------------------------------------
+
+    /** @param backing daily_wallpaper on: a dark backing, since any picture can sit behind the panel's grey text. */
+    private void setUpEpisodesPanel(boolean backing) {
+        episodes = new EpisodesPanel(this, root, glass, new EpisodesPanel.Host() {
+            @Override
+            public void onRowFocused(String title, String subtitle) {
+                showEpisodeTitle(title, subtitle);
+            }
+
+            @Override
+            public void onRowsLeft() {
+                restoreDockTitle();
+            }
+
+            @Override
+            public void focusDockTile(int position) {
+                focusTile(position);
+            }
+
+            @Override
+            public void onPanelShown(boolean shown, int textLeft) {
+                fitTitleBesidePanel(shown, textLeft);
+            }
+        }, !animations || reducedMotion, backing);
+        // The rows stop above the dock band, wherever the grid's layout parks the dock.
+        grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> episodes.setDockCardTop(dockCardTop()));
+        // The title's second line comes and goes with the rows: keep its bottom edge where the dock put it.
+        hero.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (heroDockTop > 0 && b - t != ob - ot) hero.setY(heroDockTop - 40 * density - (b - t));
+        });
+    }
+
+    /** daily_wallpaper: a worker for the copies, and a watch on the app's picture while Home is in front. */
+    private void setUpDailyWallpaper() {
+        dailyIo = Executors.newSingleThreadExecutor();
+        dailyObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
+            @Override
+            public void onChange(boolean selfChange) {
+                syncDaily(null);
+            }
+        };
+    }
+
+    /**
+     * Copies the app's picture in when it is new, then fades it in on Home. {@code "home"} also asks the app to
+     * check Bing when a check is due; its answer arrives through the observer.
+     */
+    private void syncDaily(String reason) {
+        Context app = getApplicationContext();
+        try {
+            dailyIo.execute(() -> {
+                DailyWallpaper.Picture picture = DailyWallpaper.sync(app, reason);
+                if (picture != null) runOnUiThread(() -> {
+                    if (!isDestroyed()) wallpaperPlayer.showDaily(picture);
+                });
+            });
+        } catch (RejectedExecutionException ignored) {
+            // Home is closing.
+        }
+    }
+
+    /** Up from the dock: the panel's bottom row when it has one; false lets focus go up to the top bar as before. */
+    private boolean episodesUp(int position) {
+        if (episodes == null || reordering || !episodes.focusFromDock(position)) return false;
+        grid.playSoundEffect(SoundEffectConstants.NAVIGATION_UP);
+        return true;
+    }
+
+    /** The dock tiles' top in root coordinates, as parked (a vertical grid's scroll added back), or -1. */
+    private int dockCardTop() {
+        RecyclerView.ViewHolder vh = grid.findViewHolderForAdapterPosition(0);
+        View card = vh == null ? null : vh.itemView.findViewById(R.id.card);
+        if (card == null || card.getHeight() == 0) return -1;
+        Rect r = new Rect();
+        try {
+            root.offsetDescendantRectToMyCoords(card, r);
+        } catch (IllegalArgumentException e) {
+            return -1;   // a holder detached by a scroll
+        }
+        return r.top + (singleRow || stripRow ? 0 : grid.computeVerticalScrollOffset());
+    }
+
+    /** A panel row is focused: the big title names the series, with "S05E03 · Episode name" under it. */
+    private void showEpisodeTitle(String title, String subtitle) {
+        if (hero.getVisibility() != View.VISIBLE) return;
+        Runnable fill = () -> {
+            heroName.setText(title);
+            heroMeta.setText(subtitle);
+            heroMeta.setVisibility(subtitle != null ? View.VISIBLE : cinematic ? View.INVISIBLE : View.GONE);
+        };
+        hero.animate().cancel();
+        hero.setTranslationX(0f);
+        if (!animations || reducedMotion || !heroShown) {
+            fill.run();
+            hero.setAlpha(1f);
+            heroShown = true;
+            return;
+        }
+        hero.animate().alpha(0f).setDuration(90).withEndAction(() -> {
+            fill.run();
+            hero.animate().alpha(1f).setDuration(160).start();
+        }).start();
+    }
+
+    /** Focus left the rows: the title goes back to the dock app Up came from. */
+    private void restoreDockTitle() {
+        if (hero.getVisibility() != View.VISIBLE || adapter.appCount() == 0) return;
+        hero.animate().cancel();
+        hero.setTranslationX(0f);
+        hero.setAlpha(heroShown ? 1f : 0f);
+        int position = Math.max(0, Math.min(lastFocused, adapter.appCount() - 1));
+        heroName.setText(adapter.labelAt(position));
+        if (cinematic) updateHeroMeta(position);
+        else heroMeta.setVisibility(View.GONE);
+    }
+
+    /** With the panel on screen the title stops short of it and ends in "…". */
+    private void fitTitleBesidePanel(boolean shown, int textLeft) {
+        int left = hero.getLeft() > 0 ? hero.getLeft() : (int) (68 * density);
+        int max = shown ? Math.max((int) (120 * density), textLeft - left - (int) (24 * density)) : Integer.MAX_VALUE;
+        heroName.setEllipsize(TextUtils.TruncateAt.END);
+        heroMeta.setEllipsize(TextUtils.TruncateAt.END);
+        heroName.setMaxWidth(max);
+        heroMeta.setMaxWidth(max);
+    }
+
     // ---- navigation ------------------------------------------------------------------------------
 
     @Override
@@ -2261,7 +2419,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (singleRow) {
             // One row: Up leaves for the top bar, Down has nowhere to go, and Left/Right walk the whole row,
             // stopping at its two ends (the default focus search scrolls the row to the next tile).
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return episodesUp(position);
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return true;
             boolean forward = rtlAppGrid ? keyCode == KeyEvent.KEYCODE_DPAD_LEFT : keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
             int last = adapter.focusablePosition(count - 1);
@@ -2286,7 +2444,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                if (inDock) return false;
+                if (inDock) return episodesUp(position);
                 target = nearestOnScreen(position, 0, dockEnd);
             } else {
                 if (!inDock) return true;
@@ -2312,7 +2470,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT);
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
+            if (position < COLUMNS) return episodesUp(position);   // dock row: the episodes panel, or the top bar
             target = position - COLUMNS;
         } else {
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;

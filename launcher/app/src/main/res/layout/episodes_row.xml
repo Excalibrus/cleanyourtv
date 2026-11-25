@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One NEW EPISODES row: series, "S05E03 +2", day. Focusable; focused it turns white like the top bar's pills. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="19dp"
+    android:background="@drawable/episodes_row_bg"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingLeft="8dp"
+    android:paddingRight="8dp">
+
+    <TextView
+        android:id="@+id/epName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:duplicateParentState="true"
+        android:ellipsize="end"
+        android:fontFamily="@string/font_regular"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textColor="@color/episodes_name"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/epCode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="11dp"
+        android:duplicateParentState="true"
+        android:fontFamily="@string/font_regular"
+        android:fontFeatureSettings="tnum"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textColor="@color/episodes_code"
+        android:textSize="11.5sp" />
+
+    <TextView
+        android:id="@+id/epDay"
+        android:layout_width="75dp"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="11dp"
+        android:duplicateParentState="true"
+        android:fontFamily="@string/font_medium"
+        android:gravity="right"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textColor="@color/episodes_day"
+        android:textSize="11.5sp" />
+</LinearLayout>

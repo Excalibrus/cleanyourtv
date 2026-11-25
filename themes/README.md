@@ -145,6 +145,10 @@ A new key needs one there in the same pull request.
 | `dock_band` | bool | Draw the dock band and its edge (`true` by default); `false` leaves the tiles floating on the wallpaper with no band, border or dark slab |
 | `single_row` | bool | Every app in the dock's row, the dock apps first, scrolling sideways; no grid below (`false` by default; needs `dock_row`) |
 | `dock_band_all` | bool | With `single_row`, the band runs behind every app in the row, not only the dock apps (`false` by default) |
+| `strip_row` | bool | The dock in a row of its own, every other app in one sideways row of smaller tiles under it (`false` by default; needs `dock_row`, `single_row` wins) |
+| `strip_columns` | int | With `strip_row`, how many of the smaller tiles fit across the screen, 2 to 8 (`6` by default) |
+| `episodes_panel` | bool | A NEW EPISODES panel top right, above the dock, filled by the New Episodes app (`local.newepisodes`, signed with the launcher's key); Up from the dock enters it (`false` by default; needs `dock_row`) |
+| `daily_wallpaper` | bool | The Daily Wallpaper app's picture of the day (`local.dailywallpaper`, signed with the launcher's key) as Home's wallpaper and the clock's, dimmed to suit the picture, with its caption bottom right; a new one fades in, and the `episodes_panel` panel gets a dark backing. A Wallpaper pick in Launcher settings wins until Theme default (`false` by default) |
 | `ambient_glow` | bool | The glow behind the dock in the focused app's colour (`true` by default); `false` keeps only `background_color` or the wallpaper, e.g. for a calm photo background |
 | `app_glow` | bool | The focus highlight glows in the focused app's colour on every tile, as `cinematic_home` does for the dock (`false` by default) |
 | `fade_rows` | bool | The rows fade out as they scroll up under the clock instead of being cut off at a hard line; the wallpaper or sky shows through. The grid then draws into a hardware layer (about 6 MB of graphics memory at 1080p) (`false` by default) |

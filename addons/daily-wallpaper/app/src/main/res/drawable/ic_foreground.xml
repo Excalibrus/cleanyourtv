@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The banner's sun and hills inside the adaptive icon's safe zone. Own art. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#F2C14E" android:pathData="M62,44m-8,0a8,8 0 1 1 16,0a8,8 0 1 1 -16,0" />
+    <path android:fillColor="#2E4A6B" android:pathData="M30,70L44,56L54,64L66,50L78,66V78H30Z" />
+    <path android:fillColor="#4D6E94" android:pathData="M30,74C40,68 52,68 62,72C70,75 74,74 78,72V78H30Z" />
+</vector>

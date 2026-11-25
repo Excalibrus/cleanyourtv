@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">New Episodes</string>
+    <string name="signin_intro">Sign in with your Stremio account, then pick the series whose new episodes show on Home.</string>
+    <string name="signin_expired">Your Stremio sign-in has expired. Sign in again to keep the list up to date.</string>
+    <string name="signin_open">On your phone or computer, signed in to Stremio, open</string>
+    <string name="signin_code">and approve this code, or scan the QR code:</string>
+    <string name="signin_waiting">Waiting for you to approve the code…</string>
+    <string name="signin_getting">Getting a code…</string>
+    <string name="signin_offline">Couldn\'t reach Stremio. Check the TV\'s internet connection, then press New code.</string>
+    <string name="new_code">New code</string>
+    <string name="qr_description">QR code for the Stremio sign-in link</string>
+    <string name="series_label">Series to follow</string>
+    <string name="series_hint">From your Stremio library. A series stays off until you tick it.</string>
+    <string name="library_loading">Loading your Stremio library…</string>
+    <string name="library_failed">Couldn\'t load your Stremio library yet. It tries again by itself; Refresh tries now.</string>
+    <string name="library_empty">Your Stremio library has no series. Add some in Stremio, then press Refresh.</string>
+    <string name="rows_label">New episodes</string>
+    <string name="rows_none_picked">Tick a series on the left to follow it.</string>
+    <string name="rows_none">No new episodes right now.</string>
+    <string name="refresh">Refresh</string>
+    <string name="sign_out">Sign out</string>
+    <string name="sign_out_confirm">Press again to sign out</string>
+</resources>

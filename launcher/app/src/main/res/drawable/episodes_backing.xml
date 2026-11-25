@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The NEW EPISODES panel's backing with daily_wallpaper on: a bright part of the day's picture can sit right behind
+     its grey text. The dock band's colour, a faint edge like the pills', and corners around the focused row's. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#99141416" />
+    <stroke android:width="1dp" android:color="#1AFFFFFF" />
+    <corners android:radius="15.5dp" />
+</shape>
