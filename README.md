@@ -7,13 +7,19 @@
 >   <img src="docs/switches/input_tiles.jpg" width="49%" alt="Tedi Launcher App library with input tiles">
 > </p>
 >
-> - **One low row** of tiles ending in an Apps tile (`pinned_row`), with Home drawn a little smaller (`ui_scale`).
-> - **Input tiles**: an HDMI or AV input dressed as a tile with a title, an icon (TV providers, consoles, PC, or your
->   own picture) and a caption, made in the App library's Inputs row and put on Home (`input_tiles`).
-> - **Icon-only top bar**: Inputs, Bluetooth, Wi-Fi and Settings as round buttons (`top_bar_icons`).
-> - **Add-ons**: [Bluetooth Connect](addons/bluetooth-connect/) for speakers and headphones,
->   [Daily Wallpaper](addons/daily-wallpaper/) (Bing's picture of the day) and [New Episodes](addons/new-episodes/)
->   (new episodes of your Stremio series on Home). Install them before the launcher, from the same computer.
+> | | Stock CleanYourTV launcher | Tedi Launcher |
+> |---|---|---|
+> | **Home layout** | A dock of four apps on a band, with all apps in a 4-column grid below | One low row of your chosen tiles ending in an Apps tile (`pinned_row`); everything else lives in the App library |
+> | **App library** | None: every app is in the grid on Home | Full-screen library from the Apps tile; OK opens, hold OK for options (`app_library`, `tile_menu`) |
+> | **HDMI / AV inputs** | Only through the Inputs menu | Input tiles: an input as a tile with a title, icon (TV providers, consoles, PC or your own picture) and caption, on Home next to the apps (`input_tiles`) |
+> | **Top bar** | Pills with labels: Inputs, Wi-Fi, Settings | Round icon-only buttons, with a Bluetooth button added (`icon_only_buttons`, `top_bar_icons`) |
+> | **Bluetooth** | Through the TV's Settings | One press from Home: pick speakers or headphones and connect ([Bluetooth Connect](addons/bluetooth-connect/)) |
+> | **Wallpaper** | The theme's picture | Bing's picture of the day, with its caption ([Daily Wallpaper](addons/daily-wallpaper/), `daily_wallpaper`) |
+> | **What to watch** | Nothing | New episodes of your Stremio series as pills under the top bar ([New Episodes](addons/new-episodes/), `episodes_panel`) |
+> | **Focus glow** | Background glow changes colour with the focused tile | Off, so the wallpaper stays still (`ambient_glow`) |
+> | **Size** | Full size | Drawn at 88 %, so more wallpaper shows (`ui_scale`) |
+>
+> Install the three add-ons before the launcher, from the same computer.
 >
 > `launcher/app/src/main/res/values/config.xml` is set up for a Sony BRAVIA; for another TV, put that TV's dock apps,
 > hidden apps and Live TV app in a theme `config.json` ([themes/README.md](themes/README.md)) and push it with
