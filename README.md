@@ -2,6 +2,11 @@
 > **This fork is Tedi Launcher**: [CleanYourTV](https://github.com/Gathin23/cleanyourtv) with a reworked Home. Clean
 > the TV exactly as below with [PROMPT.md](PROMPT.md); the launcher it installs is this one. On top of the original:
 >
+> <p align="center">
+>   <img src="docs/switches/top_bar_icons.jpg" width="49%" alt="Tedi Launcher Home on a Sony BRAVIA">
+>   <img src="docs/switches/input_tiles.jpg" width="49%" alt="Tedi Launcher App library with input tiles">
+> </p>
+>
 > - **One low row** of tiles ending in an Apps tile (`pinned_row`), with Home drawn a little smaller (`ui_scale`).
 > - **Input tiles**: an HDMI or AV input dressed as a tile with a title, an icon (TV providers, consoles, PC, or your
 >   own picture) and a caption, made in the App library's Inputs row and put on Home (`input_tiles`).
