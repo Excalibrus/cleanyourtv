@@ -27,7 +27,7 @@ battery and a quiet guard but cannot connect or disconnect them.
 | Permission | Why |
 |---|---|
 | Nearby devices (`BLUETOOTH_CONNECT`, Android 12+) | To list paired devices and connect or disconnect them. Granted by `install.sh`; otherwise the app asks once. |
-| Bluetooth (`BLUETOOTH`, Android 11 and older) | The same on older versions, granted at install. |
+| Bluetooth (`BLUETOOTH` and `BLUETOOTH_ADMIN`, Android 11 and older) | The same on older versions, granted at install. |
 
 No scanning, no location, no internet permission: nothing leaves the TV. No background service, telemetry, ads,
 accounts or libraries.
