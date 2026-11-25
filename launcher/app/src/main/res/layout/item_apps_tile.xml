@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- pinned_row: the App library as a square tile at the end of Home's row. Sized in AppAdapter.appsTile; the 8dp
+     top padding matches item_app.xml, so it lines up with the tiles. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:paddingTop="8dp"
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:id="@+id/btnLibrary"
+        android:layout_width="101dp"
+        android:layout_height="101dp"
+        android:layout_gravity="center_horizontal|top"
+        android:background="@drawable/apps_tile_bg"
+        android:clickable="true"
+        android:contentDescription="Apps"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        tools:ignore="HardcodedText">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:duplicateParentState="true"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_apps"
+            android:tint="@drawable/pill_text" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="9dp"
+            android:duplicateParentState="true"
+            android:fontFamily="@string/font_medium"
+            android:includeFontPadding="false"
+            android:text="Apps"
+            android:textColor="@drawable/pill_text"
+            android:textSize="16sp" />
+    </LinearLayout>
+</FrameLayout>

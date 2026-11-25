@@ -101,7 +101,7 @@ import java.util.concurrent.RejectedExecutionException;
 public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void attachBaseContext(android.content.Context base) {
-        super.attachBaseContext(LauncherLocale.wrap(base));   // locale
+        super.attachBaseContext(LauncherLocale.wrap(base, true));   // locale, ui_scale
     }
 
 
@@ -245,6 +245,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean dockRow;
     /** config single_row: every app in the dock's row, scrolling sideways, no grid below. */
     private boolean singleRow;
+    /** pinned_row: only the pinned apps in one low row, ending in the Apps tile. */
+    private boolean pinnedRow;
+    private boolean inputTiles;
     /** config strip_row: the dock in a row of its own, every other app in one sideways row of smaller tiles under it. */
     private boolean stripRow;
     /** The highlight springs past its target (config.xml, focus_overshoot); false goes straight there. */
@@ -420,6 +423,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         reducedMotion = cfg.reducedMotion;
         dockRow = cfg.dockRow;
         singleRow = cfg.singleRow;
+        pinnedRow = cfg.pinnedRow;
+        inputTiles = cfg.inputTiles;
         stripRow = cfg.stripRow;
         focusOvershoot = cfg.focusOvershoot;
         festival = cfg.festival;
@@ -532,6 +537,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         hiddenApps = new HashSet<>(cfg.hiddenApps);
 
         grid = findViewById(R.id.grid);
+        // pinned_row: the first tile's left edge on the clock's 56dp line; its cell adds half of the focus zoom's
+        // room and the 16dp gap (AppAdapter.pinnedCellPx) on each side of a design-size tile.
+        // The grid's column already starts on that line (activity_main.xml), so the grid reaches left by that much.
+        if (cfg.pinnedRow) {
+            int half = Math.round((Math.min(AppAdapter.DESIGN_W_DP, cfg.pinnedTileWidth) * (AppAdapter.FOCUS_SCALE - 1f)
+                    + 16) / 2f * density);
+            grid.setPaddingRelative(0, grid.getPaddingTop(), grid.getPaddingEnd(), grid.getPaddingBottom());
+            ((ViewGroup.MarginLayoutParams) ((View) grid.getParent()).getLayoutParams()).setMarginStart(-half);
+        }
         rtlAppGrid = getResources().getBoolean(R.bool.rtl_app_grid);
         // Mirror only the app grid; the header and other locales keep their own layouts.
         // single_row: one span laid out sideways, so the same adapter, glass and dock band serve a scrolling row.
@@ -633,6 +647,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // Item height follows the tile size, which follows the columns and the rows that must fit (AppAdapter.tileWidthPx).
             int inner = (r - l) - grid.getPaddingLeft() - grid.getPaddingRight();
             int tileW = AppAdapter.tileWidthPx(inner, h, COLUMNS, rowsBelowDock, cfg.dockTitle, cfg.dockRow, density);
+            if (cfg.pinnedRow) tileW = AppAdapter.pinnedWidthPx(tileW, cfg.pinnedTileWidth, density);
             int itemH = AppAdapter.itemHeightPx(AppAdapter.tileHeightPx(tileW), density);
             int dockRow = itemH + (int) (AppAdapter.DOCK_EXTRA_DP * density);   // item height plus DockDecoration offsets
             // strip_row: one row of the strip's smaller tiles under the dock, whatever rows_below_dock says.
@@ -674,7 +689,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // padding, leaving the glass at the XML design size until a key is pressed.
             grid.post(this::refitGlass);
         });
-        if (cfg.episodesPanel) setUpEpisodesPanel(cfg.dailyWallpaper);
+        if (cfg.episodesPanel) setUpEpisodesPanel(cfg.dailyWallpaper, cfg.episodesPills);
 
         // Keep the glass glued to its tile while the grid scrolls.
         grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -759,7 +774,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             libraryFromTopBar = true;   // closing it goes back to this button, not to the pill after the last row
         });
         btnLibraryTop.setVisibility(cfg.libraryButton && cfg.appLibrary ? View.VISIBLE : View.GONE);
-        addTopBarApps(cfg.topBarApps, cfg.launchActions);
+        addTopBarApps(cfg.topBarApps, cfg.launchActions, cfg.topBarIcons);
         iconOnlyButtons = cfg.iconOnlyButtons;
         topMenu = cfg.topMenu;
         wifiIconOnly = iconOnlyButtons && cfg.wifiLabelWidth <= 0;
@@ -1667,6 +1682,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             });
         });
         openPopup = appLibrary.popup;
+        if (inputTiles) appLibrary.setInputs(libraryInputs(), this::openInput);
         appLibrary.show();
     }
 
@@ -2286,7 +2302,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     // ---- episodes panel (config.xml episodes_panel) -------------------------------------------------
 
     /** @param backing daily_wallpaper on: a dark backing, since any picture can sit behind the panel's grey text. */
-    private void setUpEpisodesPanel(boolean backing) {
+    private void setUpEpisodesPanel(boolean backing, boolean episodesPills) {
         episodes = new EpisodesPanel(this, root, glass, new EpisodesPanel.Host() {
             @Override
             public void onRowFocused(String title, String subtitle) {
@@ -2307,7 +2323,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             public void onPanelShown(boolean shown, int textLeft) {
                 fitTitleBesidePanel(shown, textLeft);
             }
-        }, !animations || reducedMotion, backing);
+        }, !animations || reducedMotion, backing, episodesPills);
         // The rows stop above the dock band, wherever the grid's layout parks the dock.
         grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> episodes.setDockCardTop(dockCardTop()));
         // The title's second line comes and goes with the rows: keep its bottom edge where the dock put it.
@@ -2556,7 +2572,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * Puts each top_bar_apps app in the top bar as a round pill with the app's own logo, left of the network pill.
      * The logo keeps its colours: the pill style's tint, which turns the other icons white, is cleared.
      */
-    private void addTopBarApps(List<String> packages, Map<String, String> launchActions) {
+    private void addTopBarApps(List<String> packages, Map<String, String> launchActions, Map<String, String> icons) {
         ViewGroup bar = findViewById(R.id.topButtons);
         PackageManager pm = getPackageManager();
         int size = Math.round(22 * density);
@@ -2582,8 +2598,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // pillKeys finds the bar's ends by id: without one of its own, every app button would be an end.
             button.setId(View.generateViewId());
             logo.setBounds(0, 0, size, size);
-            button.setCompoundDrawablesRelative(logo, null, null, null);
-            button.setCompoundDrawableTintList(null);
+            // top_bar_icons: a bundled white icon, tinted like Wi-Fi and Settings (dark on the focused pill).
+            String iconName = icons.get(pkg);
+            int iconId = iconName != null && iconName.startsWith("ic_")
+                    ? getResources().getIdentifier(iconName, "drawable", getPackageName()) : 0;
+            Drawable bundled = iconId != 0 ? getDrawable(iconId) : null;
+            if (bundled != null) {
+                bundled.setBounds(0, 0, size, size);
+                button.setCompoundDrawablesRelative(bundled, null, null, null);
+            } else {
+                button.setCompoundDrawablesRelative(logo, null, null, null);
+                button.setCompoundDrawableTintList(null);
+            }
             button.setContentDescription(label);
             Intent target = launch;
             button.setOnClickListener(v -> open(new Intent(target)));
@@ -2591,6 +2617,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             bar.addView(button, bar.indexOfChild(getResources().getBoolean(R.bool.rtl_menu_bar) ? btnVpn : btnWifi));
             topAppButtons.add(button);
         }
+    }
+
+    @Override public void onInputTileOpen(String inputId) {
+        if (inputId != null) openInput(inputId);
+    }
+
+    @Override public boolean onAppsTileKey(int keyCode) {
+        int count = adapter.appCount();
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && count > 0) {
+            focusTile(adapter.focusablePosition(count - 1));
+            grid.playSoundEffect(SoundEffectConstants.NAVIGATION_LEFT);
+        } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && !episodesUp(Math.max(0, count - 1))) {
+            firstTopButton().requestFocus();
+        }
+        return true;   // Right and Down: the row ends here
     }
 
     @Override public void onLibraryUp() {
@@ -3165,6 +3206,62 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      *  with that scheme and no MIME type. A player guarded by a permission this build does not declare
      *  throws SecurityException, which used to take Home down with it (YaOS before the manifest asked
      *  for ACCESS_TV_SOURCE). */
+    /**
+     * input_tiles: the inputs an input tile can switch to, as the Inputs menu lists them: passthrough inputs the TV
+     * shows, HDMI first, a CEC device in its port's place.
+     */
+    private List<AppLibraryDialog.LibraryInput> libraryInputs() {
+        List<AppLibraryDialog.LibraryInput> list = new ArrayList<>();
+        TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
+        if (tim == null) return list;
+        List<TvInputInfo> inputs;
+        try {
+            inputs = new ArrayList<>(tim.getTvInputList());
+        } catch (RuntimeException e) {
+            return list;
+        }
+        Collections.sort(inputs, (a, b) -> {
+            boolean ha = a.getType() == TvInputInfo.TYPE_HDMI, hb = b.getType() == TvInputInfo.TYPE_HDMI;
+            if (ha != hb) return ha ? -1 : 1;
+            return String.valueOf(a.loadLabel(this)).compareToIgnoreCase(String.valueOf(b.loadLabel(this)));
+        });
+        Set<String> inputIds = new HashSet<>();
+        for (TvInputInfo info : inputs) inputIds.add(info.getId());
+        Map<String, List<TvInputInfo>> cecDevices = new HashMap<>();
+        for (TvInputInfo info : inputs) {
+            String parent = info.getParentId();
+            if (parent == null || !inputIds.contains(parent)) continue;
+            if (!info.isPassthroughInput() || info.isHidden(this)) continue;
+            List<TvInputInfo> onPort = cecDevices.get(parent);
+            if (onPort == null) cecDevices.put(parent, onPort = new ArrayList<>());
+            onPort.add(info);
+        }
+        for (TvInputInfo info : inputs) {
+            if (!info.isPassthroughInput() || info.isHidden(this)) continue;
+            if (Integer.valueOf(-1).equals(mappedSource(info.getId()))) continue;
+            if (info.getParentId() != null && inputIds.contains(info.getParentId())) continue;
+            CharSequence l = info.loadLabel(this);
+            String port = l == null ? info.getId() : l.toString();
+            boolean hdmi = info.getType() == TvInputInfo.TYPE_HDMI;
+            if (hdmi && !port.toUpperCase(Locale.ROOT).contains("HDMI")) port = "HDMI " + port;
+            CharSequence custom = InputNames.tidy(info.loadCustomLabel(this));
+            String named = custom != null && custom.length() > 0 && !custom.toString().equals(port) ? custom.toString() : null;
+            String icon = hdmi ? InputIcons.HDMI : InputIcons.AV;
+            List<TvInputInfo> devices = cecDevices.get(info.getId());
+            if (devices == null) {
+                list.add(new AppLibraryDialog.LibraryInput(info.getId(), port, named, icon));
+                continue;
+            }
+            for (TvInputInfo device : devices) {
+                CharSequence name = InputNames.tidy(device.loadCustomLabel(this));
+                if (name == null || name.length() == 0) name = named != null ? named : device.loadLabel(this);
+                list.add(new AppLibraryDialog.LibraryInput(device.getId(), port,
+                        name == null || name.length() == 0 ? null : name.toString(), icon));
+            }
+        }
+        return list;
+    }
+
     private void openInput(String inputId) {
         // A CEC device is a child input of its HDMI port; the vendor source number belongs to the port
         // (MiTV-MFFU0). Only that lookup uses the parent: the generic path below still opens the child.
@@ -3520,7 +3617,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
         PopupWindow popup = glassPopup(panel, (int) (200 * density));
-        if (dockRow && position < adapter.movableCount()) {
+        if (dockRow && !pinnedRow && position < adapter.movableCount()) {
             boolean inDock = position < COLUMNS;
             addSettingsMenuRow(rows, popup, inDock ? R.string.tile_replace_in_dock : R.string.tile_add_to_dock,
                     () -> startDockEditFor(key, inDock));
@@ -3533,12 +3630,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             pickUp(at);
             Toast.makeText(this, R.string.reorder_hint, Toast.LENGTH_LONG).show();
         });
-        if (appLibraryEnabled) addSettingsMenuRow(rows, popup, R.string.library_remove_shortcut, () -> {
+        String tileKey = InputTiles.keyOf(pkg);
+        if (tileKey != null) {
+            // An input tile: off Home, but kept in the App library's Inputs row.
+            addSettingsMenuRow(rows, popup, R.string.library_remove_shortcut, () -> {
+                InputTiles.Tile tile = InputTiles.find(InputTiles.load(this), tileKey);
+                if (tile == null || InputTiles.put(this, tile.withHome(false))) reloadApps(false);
+                else Toast.makeText(this, R.string.library_save_failed, Toast.LENGTH_LONG).show();
+            });
+        } else if (appLibraryEnabled) addSettingsMenuRow(rows, popup, R.string.library_remove_shortcut, () -> {
             if (LibraryApps.save(this, pkg, false)) reloadApps(false);
             else Toast.makeText(this, R.string.library_save_failed, Toast.LENGTH_LONG).show();
         });
         // Some firmware has no App info page at all; a row that only toasts "can't open" helps nobody.
-        Intent info = SystemSettings.appInfo(this, pkg);
+        Intent info = tileKey != null ? null : SystemSettings.appInfo(this, pkg);
         if (info != null) addSettingsMenuRow(rows, popup, R.string.library_app_info, () -> open(info));
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         popup.setWidth(Math.max((int) (200 * density), panel.getMeasuredWidth()));

@@ -24,12 +24,25 @@ final class LauncherLocale {
 
     /** base with the configured language, or base itself when locale is off. */
     static Context wrap(Context base) {
-        Locale locale = parse(Config.load(base).locale);
-        if (locale == null) return base;
-        // Formatters that take no Context (the clock's date, the lunar line) follow the default locale.
-        Locale.setDefault(locale);
+        return wrap(base, false);
+    }
+
+    /**
+     * Also scaled: Home's ui_scale, as a lower density, so every dp and sp on Home (tiles, pills, text, popups)
+     * shrinks by the same amount. Read with the language from one Config load.
+     */
+    static Context wrap(Context base, boolean scaled) {
+        Config cfg = Config.load(base);
+        Locale locale = parse(cfg.locale);
+        int scale = scaled ? cfg.uiScale : 100;
+        if (locale == null && scale == 100) return base;
         Configuration c = new Configuration(base.getResources().getConfiguration());
-        c.setLocale(locale);
+        if (locale != null) {
+            // Formatters that take no Context (the clock's date, the lunar line) follow the default locale.
+            Locale.setDefault(locale);
+            c.setLocale(locale);
+        }
+        if (scale != 100) c.densityDpi = Math.round(c.densityDpi * scale / 100f);
         return base.createConfigurationContext(c);
     }
 }

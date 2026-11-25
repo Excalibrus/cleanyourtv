@@ -262,6 +262,24 @@ final class Config {
     final int stripColumns;
     /** The NEW EPISODES panel top right, filled by the New Episodes app (config.xml, episodes_panel). */
     final boolean episodesPanel;
+    /** episodes_panel as one equal-width pill per episode under the top bar (config.xml, episodes_pills). */
+    final boolean episodesPills;
+    /**
+     * pinned_row: Home is one low row of the dock apps and the apps added in the App library, tiles close together,
+     * with the library as an Apps tile at its end (config.xml, pinned_row; needs single_row and app_library).
+     */
+    final boolean pinnedRow;
+    /** pinned_row: the tiles' width in dp, 100 to 180 (config.xml, pinned_tile_width). */
+    final int pinnedTileWidth;
+    /** Home drawn at this percent of its size, 70 to 100: every tile, pill, text and popup (config.xml, ui_scale). */
+    final int uiScale;
+    /**
+     * Inputs as tiles: a title, an icon and a caption on an app-like banner, made in the App library and put on Home
+     * like apps (config.xml, input_tiles).
+     */
+    final boolean inputTiles;
+    /** top_bar_apps buttons drawn with a bundled ic_* icon in the pill's white instead of the app's logo (config.xml, top_bar_icons). */
+    final Map<String, String> topBarIcons;
     /** daily_wallpaper on and no Wallpaper pick on the TV: the Daily Wallpaper app's picture is Home's wallpaper. */
     final boolean dailyWallpaper;
     /** That picture's copy on this TV, already in {@link #wallpapers}; null before the first one. */
@@ -283,6 +301,7 @@ final class Config {
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
                    boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
                    Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean stripRow, int stripColumns, boolean episodesPanel,
+                   boolean episodesPills, boolean pinnedRow, int pinnedTileWidth, int uiScale, boolean inputTiles, Map<String, String> topBarIcons,
                    boolean dailyWallpaper, File dailyPicture, String dailyCaption) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
@@ -390,6 +409,12 @@ final class Config {
         this.stripRow = stripRow;
         this.stripColumns = stripColumns;
         this.episodesPanel = episodesPanel;
+        this.episodesPills = episodesPills;
+        this.pinnedRow = pinnedRow;
+        this.pinnedTileWidth = pinnedTileWidth;
+        this.uiScale = uiScale;
+        this.inputTiles = inputTiles;
+        this.topBarIcons = Collections.unmodifiableMap(topBarIcons);
         this.dailyWallpaper = dailyWallpaper;
         this.dailyPicture = dailyPicture;
         this.dailyCaption = dailyCaption;
@@ -517,6 +542,12 @@ final class Config {
         boolean stripRow = res.getBoolean(R.bool.strip_row);
         int stripColumns = res.getInteger(R.integer.strip_columns);
         boolean episodesPanel = res.getBoolean(R.bool.episodes_panel);
+        boolean episodesPills = res.getBoolean(R.bool.episodes_pills);
+        boolean pinnedRow = res.getBoolean(R.bool.pinned_row);
+        int pinnedTileWidth = res.getInteger(R.integer.pinned_tile_width);
+        int uiScale = res.getInteger(R.integer.ui_scale);
+        boolean inputTiles = res.getBoolean(R.bool.input_tiles);
+        List<String> topBarIcons = new ArrayList<>(Arrays.asList(res.getStringArray(R.array.top_bar_icons)));
         boolean dailyWallpaper = res.getBoolean(R.bool.daily_wallpaper);
         boolean applied = false;
 
@@ -624,6 +655,12 @@ final class Config {
             stripRow = bool(json, "strip_row", stripRow);
             stripColumns = integer(json, "strip_columns", stripColumns, 2, 8);
             episodesPanel = bool(json, "episodes_panel", episodesPanel);
+            episodesPills = bool(json, "episodes_pills", episodesPills);
+            pinnedRow = bool(json, "pinned_row", pinnedRow);
+            pinnedTileWidth = integer(json, "pinned_tile_width", pinnedTileWidth, 100, 180);
+            uiScale = integer(json, "ui_scale", uiScale, 70, 100);
+            inputTiles = bool(json, "input_tiles", inputTiles);
+            topBarIcons = stringList(json, "top_bar_icons", topBarIcons);
             dailyWallpaper = bool(json, "daily_wallpaper", dailyWallpaper);
             glowStyle = string(json, "glow_style", glowStyle);
             glassStyle = string(json, "glass_style", glassStyle);
@@ -702,6 +739,8 @@ final class Config {
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
                 dateBelowClock, vpnPill, locale, powerOnHomeAlways,
                 stripRow && dockRow && !singleRow, Math.max(2, Math.min(8, stripColumns)), episodesPanel && dockRow,
+                episodesPills, pinnedRow && singleRow && dockRow && library,
+                Math.max(100, Math.min(180, pinnedTileWidth)), Math.max(70, Math.min(100, uiScale)), inputTiles && library, packageMap(topBarIcons),
                 daily, dailyPicture == null ? null : dailyPicture.file, dailyPicture == null ? "" : dailyPicture.caption);
     }
 

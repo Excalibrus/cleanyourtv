@@ -64,6 +64,7 @@ A new key needs one there in the same pull request.
 | `reorder_button` | bool | A reorder button in the top bar (`false` by default); reordering is always in the Settings button's long-press menu |
 | `show_network_pill` | bool | The Wi-Fi/Ethernet pill in the top bar (`true` by default); `false` hides it |
 | `top_bar_apps` | list of package names | Apps shown as round buttons with their own logo in the top bar, left of the network pill; they leave the grid |
+| `top_bar_icons` | list of `"package=ic_name"` | A `top_bar_apps` button drawn with a white icon bundled with the launcher instead of the app's logo (`com.gathin.btconnect=ic_bluetooth`) |
 | `show_inputs_pill` | bool | The Inputs pill in the top bar, shown when the TV has inputs (`true` by default); `false` hides it, and with `top_menu` it also leaves Inputs out of the gear's menu (streamers with no HDMI input, such as the Chromecast with Google TV); what the remote's Input button does is unchanged |
 | `icon_only_buttons` | bool | Wi-Fi and Settings as round icon buttons; Inputs keeps its label (`false` by default) |
 | `icon_only_inputs` | bool | The Inputs pill as a round icon button too, its label kept as the TalkBack description (`false` by default). Works with or without `icon_only_buttons` |
@@ -149,6 +150,11 @@ A new key needs one there in the same pull request.
 | `strip_columns` | int | With `strip_row`, how many of the smaller tiles fit across the screen, 2 to 8 (`6` by default) |
 | `episodes_panel` | bool | A NEW EPISODES panel top right, above the dock, filled by the New Episodes app (`local.newepisodes`, signed with the launcher's key); Up from the dock enters it (`false` by default; needs `dock_row`) |
 | `daily_wallpaper` | bool | The Daily Wallpaper app's picture of the day (`local.dailywallpaper`, signed with the launcher's key) as Home's wallpaper and the clock's, dimmed to suit the picture, with its caption bottom right; a new one fades in, and the `episodes_panel` panel gets a dark backing. A Wallpaper pick in Launcher settings wins until Theme default (`false` by default) |
+| `episodes_pills` | bool | With `episodes_panel`, one pill per episode in the top bar's style, all one width ("Series · E3 · Sun"), no heading; the focused one's title shows under them (`false` by default) |
+| `pinned_row` | bool | With `single_row`, Home's row shows only the dock apps and apps added from the App library, low and without the band or title, with an Apps tile at the end that opens the library (`false` by default; needs `single_row` and `app_library`) |
+| `pinned_tile_width` | int | With `pinned_row`, the tiles' width in dp, 100 to 180; the height follows at 16:9 (`180` by default) |
+| `ui_scale` | int | Home drawn at this percent of its size, 70 to 100: every tile, pill, text and popup shrinks together, leaving the wallpaper more room (`100` by default) |
+| `input_tiles` | bool | Inputs dressed as tiles: a title, an icon (TV providers, consoles, PC and more, or your own pictures) and a caption on an app-like banner, made in the App library and put on Home like apps; OK switches to the input (`false` by default; needs `app_library`) |
 | `ambient_glow` | bool | The glow behind the dock in the focused app's colour (`true` by default); `false` keeps only `background_color` or the wallpaper, e.g. for a calm photo background |
 | `app_glow` | bool | The focus highlight glows in the focused app's colour on every tile, as `cinematic_home` does for the dock (`false` by default) |
 | `fade_rows` | bool | The rows fade out as they scroll up under the clock instead of being cut off at a hard line; the wallpaper or sky shows through. The grid then draws into a hardware layer (about 6 MB of graphics memory at 1080p) (`false` by default) |

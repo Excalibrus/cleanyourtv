@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- episodes_pills: one episode as a pill like the top bar's, "Series · E3 · Sun". EpisodesPanel gives every pill
+     the widest one's width; then the name takes the room left and the code and day keep to the right. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="36dp"
+    android:layout_marginTop="8dp"
+    android:background="@drawable/pill_bg"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp">
+
+    <TextView
+        android:id="@+id/epName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:duplicateParentState="true"
+        android:ellipsize="end"
+        android:fontFamily="@string/font_medium"
+        android:includeFontPadding="false"
+        android:maxWidth="190dp"
+        android:singleLine="true"
+        android:textColor="@color/episodes_name"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/epCode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:duplicateParentState="true"
+        android:fontFamily="@string/font_regular"
+        android:fontFeatureSettings="tnum"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textColor="@color/episodes_code"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/epDay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:duplicateParentState="true"
+        android:fontFamily="@string/font_medium"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textColor="@color/episodes_day"
+        android:textSize="13sp" />
+</LinearLayout>

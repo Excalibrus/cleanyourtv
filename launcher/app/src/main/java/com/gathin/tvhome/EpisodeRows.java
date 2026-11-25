@@ -193,6 +193,15 @@ final class EpisodeRows {
         return f.format(new Date(released));
     }
 
+    /** episodes_pills: " · E3", " · E3 +2" with more new ones (en spaces); empty for a line that is not an episode. */
+    static String pillCode(Line line) {
+        if (line.kind != Kind.EPISODE || line.episode == null) return "";
+        return PILL_DOT + "E" + line.episode.episode + (line.episode.more > 0 ? " +" + line.episode.more : "");
+    }
+
+    /** The separator between a pill's parts: a dot with an en space on each side. */
+    static final String PILL_DOT = "\u2002\u00B7\u2002";
+
     /** "S05E03". */
     static String code(int season, int episode) {
         return String.format(Locale.US, "S%02dE%02d", season, episode);

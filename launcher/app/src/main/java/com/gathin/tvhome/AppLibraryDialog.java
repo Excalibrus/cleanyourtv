@@ -1,8 +1,11 @@
 package com.gathin.tvhome;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -14,13 +17,18 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupWindow;
@@ -44,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /** On-demand installed-app picker. Uses the launcher's glass resources; no backdrop capture or blur. */
@@ -103,6 +112,36 @@ final class AppLibraryDialog {
     private float scrollOffset;
     private boolean highlightShown;
     private final int catalogWidth;
+
+    /** input_tiles: one of the TV's inputs, that a tile can switch to. */
+    static final class LibraryInput {
+        final String id;
+        /** "HDMI 4": shown under the name. */
+        final String port;
+        /** The TV's own name for it (Settings > Inputs, or the CEC device's), or null. */
+        final String name;
+        /** The icon when none is picked: InputIcons.HDMI or InputIcons.AV. */
+        final String icon;
+
+        LibraryInput(String id, String port, String name, String icon) {
+            this.id = id;
+            this.port = port;
+            this.name = name;
+            this.icon = icon;
+        }
+    }
+
+    /** input_tiles: the inputs a tile can use; empty when the switch is off or the TV lists none. */
+    private List<LibraryInput> inputs = new ArrayList<>();
+    private Consumer<String> openInput;
+    private LinearLayout inputRow;
+    private int inputFocus;
+
+    /** input_tiles: call before show(). */
+    void setInputs(List<LibraryInput> inputs, Consumer<String> openInput) {
+        this.inputs = new ArrayList<>(inputs);
+        this.openInput = openInput;
+    }
 
     private void stopHighlight() {
         if (spring != null) spring.cancel();
@@ -178,6 +217,7 @@ final class AppLibraryDialog {
 
     void close() {
         dismissActions();
+        if (editor != null) editor.dismiss();
         if (popup.isShowing()) {
             popup.dismiss();
         } else if (!closed) {
@@ -345,8 +385,9 @@ final class AppLibraryDialog {
 
     private void showCatalog() {
         stopHighlight();
-        resize(catalogWidth, dp(280));
+        resize(catalogWidth, dp(inputs.isEmpty() ? 280 : 436));
         panel.removeAllViews();
+        inputRow = null;
         LinearLayout header = new LinearLayout(activity);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(12), dp(4), dp(8), dp(4));
@@ -409,6 +450,7 @@ final class AppLibraryDialog {
             }
         });
         panel.addView(shelf, new LinearLayout.LayoutParams(-1, 0, 1));
+        if (!inputs.isEmpty()) addInputs();
         int position = Math.min(selectedPosition, apps.size() - 1);
         for (int i = 0; i < apps.size(); i++) {
             if (apps.get(i).activityInfo.packageName.equals(selectedPackage)) { position = i; break; }
@@ -536,6 +578,11 @@ final class AppLibraryDialog {
                 Toast.makeText(activity, activity.getString(R.string.cant_open, label(app)), Toast.LENGTH_SHORT).show();
             }
         });
+        placeMenu(menu, menuPanel, rows, anchor);
+    }
+
+    /** Sizes an action menu to its longest row and shows it by anchor, inside the library. */
+    private void placeMenu(PopupWindow menu, View menuPanel, LinearLayout rows, View anchor) {
         int menuWidth = dp(220);
         for (int i = 0; i < rows.getChildCount(); i++) {
             TextView title = rows.getChildAt(i).findViewById(R.id.title);
@@ -564,6 +611,10 @@ final class AppLibraryDialog {
     }
 
     private void addAction(LinearLayout rows, int label, Runnable action) {
+        addAction(rows, activity.getString(label), action);
+    }
+
+    private void addAction(LinearLayout rows, String label, Runnable action) {
         View row = activity.getLayoutInflater().inflate(R.layout.item_input, rows, false);
         ((TextView) row.findViewById(R.id.title)).setText(label);
         row.setFocusableInTouchMode(true);
@@ -578,6 +629,522 @@ final class AppLibraryDialog {
                     || key == KeyEvent.KEYCODE_DPAD_RIGHT || key == KeyEvent.KEYCODE_DPAD_UP && index == 0
                     || key == KeyEvent.KEYCODE_DPAD_DOWN && index == rows.getChildCount() - 1);
         });
+    }
+
+    // ---- input_tiles ------------------------------------------------------------------------------
+
+    /** The open tile editor, over the library; null when none is. */
+    private PopupWindow editor;
+    private LinearLayout editorRows;
+    private ImageView editorPreview;
+    private String editingKey;
+    private int editorFocus;
+
+    private void addInputs() {
+        TextView heading = text(activity.getString(R.string.inputs), 15, 0xA6FFFFFF);
+        heading.setPadding(dp(12), dp(8), dp(12), 0);
+        panel.addView(heading, new LinearLayout.LayoutParams(-1, dp(28)));
+        HorizontalScrollView scroll = new HorizontalScrollView(activity);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        scroll.setClipToPadding(false);
+        scroll.setClipChildren(false);
+        scroll.setPadding(dp(14), dp(10), dp(14), dp(8));
+        inputRow = new LinearLayout(activity);
+        inputRow.setOrientation(LinearLayout.HORIZONTAL);
+        inputRow.setClipChildren(false);
+        inputRow.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        scroll.addView(inputRow, new FrameLayout.LayoutParams(-2, -1));
+        panel.addView(scroll, new LinearLayout.LayoutParams(-1, dp(128)));
+        fillInputs();
+    }
+
+    /** The saved tiles, then "+ Input tile". */
+    private void fillInputs() {
+        if (inputRow == null) return;
+        inputRow.removeAllViews();
+        List<InputTiles.Tile> tiles = InputTiles.load(activity);
+        for (int i = 0; i < tiles.size(); i++) inputRow.addView(tileCard(tiles.get(i), i));
+        inputRow.addView(newTileCard(tiles.size()));
+    }
+
+    private LibraryInput inputFor(String id) {
+        for (LibraryInput input : inputs) if (input.id.equals(id)) return input;
+        return null;
+    }
+
+    private String fallbackIcon(String inputId) {
+        LibraryInput input = inputFor(inputId);
+        return input == null ? InputIcons.HDMI : input.icon;
+    }
+
+    /** "HDMI 4 · VIP5305", or the port alone when the TV has no name for it. */
+    private String inputLabel(String inputId) {
+        LibraryInput input = inputFor(inputId);
+        if (input == null) return activity.getString(R.string.not_available);
+        return input.name == null || input.name.isEmpty() ? input.port : input.port + " · " + input.name;
+    }
+
+    private GradientDrawable ring(boolean focused, int radius) {
+        GradientDrawable ring = new GradientDrawable();
+        ring.setCornerRadius(dp(radius));
+        ring.setColor(Color.TRANSPARENT);
+        ring.setStroke(dp(focused ? 3 : 1), focused ? 0xF2FFFFFF : 0x24FFFFFF);
+        return ring;
+    }
+
+    /** A card in the row, the size of a small Home tile, with focus, keys and the glass hidden while it has focus. */
+    private FrameLayout rowCard(int index) {
+        FrameLayout card = new FrameLayout(activity);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(156), dp(88));
+        params.setMargins(dp(6), 0, dp(6), 0);
+        card.setLayoutParams(params);
+        card.setFocusable(true);
+        card.setFocusableInTouchMode(true);
+        card.setClickable(true);
+        card.setClipToOutline(true);
+        card.setForeground(ring(false, 12));
+        card.setOnFocusChangeListener((v, focused) -> {
+            ((FrameLayout) v).setForeground(ring(focused, 12));
+            v.animate().scaleX(focused ? 1.06f : 1f).scaleY(focused ? 1.06f : 1f)
+                    .setDuration(reducedMotion ? 0 : 140).start();
+            if (!focused) return;
+            inputFocus = index;
+            if (instructions != null) instructions.setText(R.string.library_hint_open);
+            // The glass belongs to the apps' shelf: it waits there, hidden, for focus to come back up.
+            if (spring != null) spring.cancel();
+            if (highlight != null) highlight.setAlpha(0f);
+            highlightShown = false;
+        });
+        card.setOnKeyListener((v, key, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (key == KeyEvent.KEYCODE_DPAD_UP) {
+                restoreCardFocus();
+                return true;
+            }
+            int last = inputRow == null ? 0 : inputRow.getChildCount() - 1;
+            return key == KeyEvent.KEYCODE_DPAD_DOWN
+                    || (rtl ? key == KeyEvent.KEYCODE_DPAD_RIGHT : key == KeyEvent.KEYCODE_DPAD_LEFT) && index == 0
+                    || (rtl ? key == KeyEvent.KEYCODE_DPAD_LEFT : key == KeyEvent.KEYCODE_DPAD_RIGHT) && index == last;
+        });
+        return card;
+    }
+
+    private View tileCard(InputTiles.Tile tile, int index) {
+        FrameLayout card = rowCard(index);
+        GradientDrawable shape = new GradientDrawable();
+        shape.setCornerRadius(dp(12));
+        shape.setColor(0xFF16181D);
+        card.setBackground(shape);
+        ImageView banner = new ImageView(activity);
+        banner.setScaleType(ImageView.ScaleType.FIT_XY);
+        banner.setImageDrawable(new InputIcons.TileBanner(activity, tile, fallbackIcon(tile.inputId)));
+        banner.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        card.addView(banner, new FrameLayout.LayoutParams(-1, -1));
+        if (tile.home) {
+            View check = new View(activity);
+            check.setBackgroundResource(R.drawable.library_check);
+            FrameLayout.LayoutParams badge = new FrameLayout.LayoutParams(dp(16), dp(16), Gravity.TOP | Gravity.END);
+            badge.setMargins(0, dp(6), dp(6), 0);
+            card.addView(check, badge);
+        }
+        String name = tile.title.isEmpty() ? tile.caption : tile.caption.isEmpty() ? tile.title
+                : tile.title + " · " + tile.caption;
+        card.setContentDescription(name);
+        card.setOnClickListener(v -> openTileInput(tile));
+        card.setLongClickable(true);
+        card.setOnLongClickListener(v -> {
+            showTileActions(tile, v);
+            return true;
+        });
+        return card;
+    }
+
+    private View newTileCard(int index) {
+        FrameLayout card = rowCard(index);
+        card.setBackground(surface(0x0CFFFFFF, 12));
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER);
+        TextView plus = text("+", 26, 0xCCFFFFFF);
+        plus.setGravity(Gravity.CENTER);
+        content.addView(plus, new LinearLayout.LayoutParams(-2, -2));
+        TextView label = text(activity.getString(R.string.input_tile_new), 13, 0xB3FFFFFF);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-2, -2);
+        labelParams.topMargin = dp(4);
+        content.addView(label, labelParams);
+        card.addView(content, new FrameLayout.LayoutParams(-1, -1));
+        card.setContentDescription(activity.getString(R.string.input_tile_new));
+        card.setOnClickListener(v -> createTile());
+        return card;
+    }
+
+    /** Down from the apps: the card last focused in the row, or the first. */
+    private boolean focusInputs() {
+        if (inputRow == null || inputRow.getChildCount() == 0) return false;
+        inputRow.getChildAt(Math.min(inputFocus, inputRow.getChildCount() - 1)).requestFocus();
+        return true;
+    }
+
+    /** After a menu or dialog: back to the editor's row when it is open, else to the row's card. */
+    private void focusInputLater() {
+        if (editor != null && editor.isShowing() && editorRows != null) {
+            LinearLayout rows = editorRows;
+            rows.post(() -> {
+                if (rows != editorRows || actionPopup != null || rows.getChildCount() == 0) return;
+                rows.getChildAt(Math.min(editorFocus, rows.getChildCount() - 1)).requestFocus();
+            });
+            return;
+        }
+        if (inputRow == null) return;
+        LinearLayout row = inputRow;
+        row.post(() -> {
+            if (row != inputRow || actionPopup != null || editor != null || !popup.isShowing()
+                    || row.getChildCount() == 0) return;
+            row.getChildAt(Math.min(inputFocus, row.getChildCount() - 1)).requestFocus();
+        });
+    }
+
+    private void openTileInput(InputTiles.Tile tile) {
+        Consumer<String> open = openInput;
+        close();
+        if (open != null) open.accept(tile.inputId);
+    }
+
+    /** Saves the tile, then Home, the row and the editor follow it. */
+    private void saveTile(InputTiles.Tile tile) {
+        if (!InputTiles.put(activity, tile)) {
+            Toast.makeText(activity, R.string.library_save_failed, Toast.LENGTH_LONG).show();
+            return;
+        }
+        changed.run();
+        fillInputs();
+        if (editor != null && tile.key.equals(editingKey)) fillEditor();
+        focusInputLater();
+    }
+
+    /** "+ Input tile": a tile for the first input no tile has yet, named as the TV names it, then its editor. */
+    private void createTile() {
+        if (inputs.isEmpty()) return;
+        List<InputTiles.Tile> tiles = InputTiles.load(activity);
+        LibraryInput input = inputs.get(0);
+        for (LibraryInput candidate : inputs) {
+            boolean used = false;
+            for (InputTiles.Tile t : tiles) if (t.inputId.equals(candidate.id)) { used = true; break; }
+            if (!used) { input = candidate; break; }
+        }
+        InputTiles.Tile tile = new InputTiles.Tile(InputTiles.newKey(tiles), input.id,
+                defaultTitle(input), defaultCaption(input), input.icon, true);
+        if (!InputTiles.put(activity, tile)) {
+            Toast.makeText(activity, R.string.library_save_failed, Toast.LENGTH_LONG).show();
+            return;
+        }
+        changed.run();
+        fillInputs();
+        inputFocus = Math.max(0, inputRow == null ? 0 : inputRow.getChildCount() - 2);
+        showEditor(tile.key);
+    }
+
+    private void showTileActions(InputTiles.Tile tile, View anchor) {
+        dismissActions();
+        View menuPanel = activity.getLayoutInflater().inflate(R.layout.popup_inputs, panel, false);
+        LinearLayout rows = menuPanel.findViewById(R.id.rows);
+        PopupWindow menu = menuWindow(menuPanel, dp(220));
+        addAction(rows, R.string.library_open, () -> openTileInput(tile));
+        addAction(rows, R.string.input_tile_edit, () -> {
+            dismissActions();
+            showEditor(tile.key);
+        });
+        addAction(rows, tile.home ? R.string.library_remove_shortcut : R.string.library_add_home, () -> {
+            dismissActions();
+            saveTile(tile.withHome(!tile.home));
+        });
+        addAction(rows, R.string.input_tile_delete, () -> {
+            dismissActions();
+            deleteTile(tile.key);
+        });
+        placeMenu(menu, menuPanel, rows, anchor);
+    }
+
+    private void deleteTile(String key) {
+        if (!InputTiles.remove(activity, key)) {
+            Toast.makeText(activity, R.string.library_save_failed, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (editor != null && key.equals(editingKey)) editor.dismiss();
+        changed.run();
+        fillInputs();
+        focusInputLater();
+    }
+
+    private InputTiles.Tile editing() {
+        return editingKey == null ? null : InputTiles.find(InputTiles.load(activity), editingKey);
+    }
+
+    /** The editor: the tile's settings on the left, each saved as it changes; the tile as it looks on the right. */
+    private void showEditor(String key) {
+        dismissActions();
+        if (editor != null) editor.dismiss();
+        editingKey = key;
+        editorFocus = 0;
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        box.setBackgroundResource(R.drawable.glass_panel);
+        box.setPadding(dp(16), dp(14), dp(20), dp(16));
+        editorRows = new LinearLayout(activity);
+        editorRows.setOrientation(LinearLayout.VERTICAL);
+        box.addView(editorRows, new LinearLayout.LayoutParams(dp(330), -2));
+        LinearLayout side = new LinearLayout(activity);
+        side.setOrientation(LinearLayout.VERTICAL);
+        side.setGravity(Gravity.CENTER_HORIZONTAL);
+        side.setPadding(dp(22), dp(6), 0, 0);
+        FrameLayout frame = new FrameLayout(activity);
+        GradientDrawable shape = new GradientDrawable();
+        shape.setCornerRadius(dp(14));
+        shape.setColor(0xFF16181D);
+        frame.setBackground(shape);
+        frame.setClipToOutline(true);
+        editorPreview = new ImageView(activity);
+        editorPreview.setScaleType(ImageView.ScaleType.FIT_XY);
+        frame.addView(editorPreview, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams frameParams = new LinearLayout.LayoutParams(dp(224), dp(126));
+        frameParams.topMargin = dp(4);
+        side.addView(frame, frameParams);
+        box.addView(side, new LinearLayout.LayoutParams(-2, -2));
+        PopupWindow window = new PopupWindow(box, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.setOutsideTouchable(true);
+        window.setAnimationStyle(0);
+        window.setOnDismissListener(() -> {
+            if (editor == window) {
+                editor = null;
+                editorRows = null;
+                editorPreview = null;
+                editingKey = null;
+            }
+            focusInputLater();
+        });
+        editor = window;
+        fillEditor();
+        window.showAtLocation(activity.getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        focusInputLater();
+    }
+
+    private void fillEditor() {
+        InputTiles.Tile tile = editing();
+        if (tile == null || editorRows == null) {
+            if (editor != null) editor.dismiss();
+            return;
+        }
+        editorPreview.setImageDrawable(new InputIcons.TileBanner(activity, tile, fallbackIcon(tile.inputId)));
+        editorRows.removeAllViews();
+        addEditorRow(R.string.input_tile_input, inputLabel(tile.inputId), v -> chooseInput(tile, v));
+        addEditorRow(R.string.input_tile_title, tile.title, v -> askText(R.string.input_tile_title, tile.title,
+                text -> saveTile(tile.withTitle(text))));
+        addEditorRow(R.string.input_tile_caption, tile.caption, v -> askText(R.string.input_tile_caption, tile.caption,
+                text -> saveTile(tile.withCaption(text))));
+        addEditorRow(R.string.input_tile_icon, iconName(tile.icon, fallbackIcon(tile.inputId)), v -> pickIcon(tile));
+        addEditorRow(R.string.input_tile_on_home, activity.getString(tile.home ? R.string.input_tile_yes
+                : R.string.input_tile_no), v -> saveTile(tile.withHome(!tile.home)));
+        addEditorRow(R.string.input_tile_delete, "", v -> deleteTile(tile.key));
+        addEditorRow(R.string.input_tile_done, "", v -> {
+            if (editor != null) editor.dismiss();
+        });
+    }
+
+    private String iconName(String key, String fallback) {
+        if (key != null && key.startsWith(InputIcons.FILE_PREFIX)) return InputIcons.fileName(key);
+        InputIcons.Icon icon = InputIcons.find(key);
+        if (icon == null) icon = InputIcons.find(fallback);
+        return icon == null ? activity.getString(R.string.input_tile_none) : icon.name;
+    }
+
+    private void addEditorRow(int label, String value, View.OnClickListener action) {
+        View row = activity.getLayoutInflater().inflate(R.layout.item_input, editorRows, false);
+        ((TextView) row.findViewById(R.id.title)).setText(label);
+        row.findViewById(R.id.icon).setVisibility(View.GONE);
+        row.findViewById(R.id.dot).setVisibility(View.GONE);
+        TextView status = row.findViewById(R.id.status);
+        status.setText(value);
+        status.setVisibility(value.isEmpty() ? View.GONE : View.VISIBLE);
+        status.setSingleLine(true);
+        status.setEllipsize(TextUtils.TruncateAt.END);
+        status.setMaxWidth(dp(190));
+        row.setFocusableInTouchMode(true);
+        int index = editorRows.getChildCount();
+        row.setOnClickListener(v -> {
+            editorFocus = index;
+            action.onClick(v);
+        });
+        row.setOnFocusChangeListener((v, focused) -> {
+            if (focused) editorFocus = index;
+        });
+        row.setOnKeyListener((v, key, event) -> event.getAction() == KeyEvent.ACTION_DOWN
+                && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
+                || key == KeyEvent.KEYCODE_DPAD_UP && index == 0
+                || key == KeyEvent.KEYCODE_DPAD_DOWN && editorRows != null && index == editorRows.getChildCount() - 1));
+        editorRows.addView(row);
+    }
+
+    private PopupWindow menuWindow(View content, int width) {
+        PopupWindow menu = new PopupWindow(content, width, ViewGroup.LayoutParams.WRAP_CONTENT, true);
+        menu.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        menu.setOutsideTouchable(true);
+        menu.setAnimationStyle(0);
+        menu.setElevation(0f);
+        actionPopup = menu;
+        menu.setOnDismissListener(() -> {
+            if (actionPopup == menu) actionPopup = null;
+            focusInputLater();
+        });
+        return menu;
+    }
+
+    /** The inputs to switch to, as a menu by the editor's Input row. */
+    /** A new tile's title: the name the TV gives the input ("PlayStation 5"), else its port. */
+    private static String defaultTitle(LibraryInput input) {
+        return input.name != null && !input.name.isEmpty() ? input.name : input.port;
+    }
+
+    /** A new tile's caption: the port under a name, else nothing. */
+    private static String defaultCaption(LibraryInput input) {
+        return input.name != null && !input.name.isEmpty() ? input.port : "";
+    }
+
+    /** Another input for the tile; a title, caption or icon still at the old input's default follows the new one. */
+    private InputTiles.Tile switchInput(InputTiles.Tile tile, LibraryInput to) {
+        InputTiles.Tile next = tile.withInput(to.id);
+        LibraryInput from = inputFor(tile.inputId);
+        if (from == null) return next;
+        if (tile.title.equals(InputTiles.clean(defaultTitle(from)))) next = next.withTitle(defaultTitle(to));
+        if (tile.caption.equals(InputTiles.clean(defaultCaption(from)))) next = next.withCaption(defaultCaption(to));
+        if (tile.icon.equals(from.icon)) next = next.withIcon(to.icon);
+        return next;
+    }
+
+    private void chooseInput(InputTiles.Tile tile, View anchor) {
+        dismissActions();
+        View menuPanel = activity.getLayoutInflater().inflate(R.layout.popup_inputs, panel, false);
+        LinearLayout rows = menuPanel.findViewById(R.id.rows);
+        PopupWindow menu = menuWindow(menuPanel, dp(240));
+        int current = 0;
+        for (LibraryInput input : inputs) {
+            if (input.id.equals(tile.inputId)) current = rows.getChildCount();
+            addAction(rows, inputLabel(input.id), () -> {
+                dismissActions();
+                saveTile(switchInput(tile, input));
+            });
+        }
+        placeMenu(menu, menuPanel, rows, anchor);
+        if (current < rows.getChildCount()) rows.getChildAt(current).requestFocus();
+    }
+
+    private void askText(int title, String current, Consumer<String> done) {
+        EditText field = new EditText(activity);
+        field.setSingleLine(true);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        field.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        field.setText(current);
+        field.setSelection(current.length());
+        FrameLayout box = new FrameLayout(activity);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        box.addView(field);
+        AlertDialog dialog = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(title)
+                .setView(box)
+                .setPositiveButton(android.R.string.ok, (d, which) -> {
+                    hideKeyboard(field);
+                    done.accept(InputTiles.clean(field.getText().toString()));
+                })
+                .setNegativeButton(android.R.string.cancel, (d, which) -> hideKeyboard(field))
+                .create();
+        field.setOnEditorActionListener((v, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_DONE) return false;
+            dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+            return true;
+        });
+        dialog.setOnDismissListener(d -> focusInputLater());
+        dialog.show();
+    }
+
+    /** The keyboard would otherwise stay up over the editor once the dialog is gone. */
+    private void hideKeyboard(View field) {
+        InputMethodManager imm = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(field.getWindowToken(), 0);
+    }
+
+    private GradientDrawable iconCell(boolean focused, boolean current) {
+        GradientDrawable bg = surface(focused ? 0x33FFFFFF : current ? 0x1A75BBA4 : 0x00FFFFFF, 14);
+        bg.setStroke(dp(focused ? 2 : 1), focused ? 0xE6FFFFFF : current ? 0x8075BBA4 : 0x00FFFFFF);
+        return bg;
+    }
+
+    /** Every badge, then the owner's pictures, six across; the tile's current icon is marked and focused. */
+    private void pickIcon(InputTiles.Tile tile) {
+        dismissActions();
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackgroundResource(R.drawable.glass_panel);
+        box.setPadding(dp(14), dp(12), dp(14), dp(14));
+        TextView title = text(activity.getString(R.string.input_icon_title), 17, Color.WHITE);
+        title.setPadding(dp(6), 0, dp(6), dp(10));
+        box.addView(title);
+        String fallback = fallbackIcon(tile.inputId);
+        String current = tile.icon.isEmpty() ? fallback : tile.icon;
+        List<String> keys = new ArrayList<>();
+        for (InputIcons.Icon icon : InputIcons.ALL) keys.add(icon.key);
+        List<String> own = InputIcons.files(activity);
+        keys.addAll(own);
+        int columns = 6;
+        PopupWindow picker = menuWindow(box, ViewGroup.LayoutParams.WRAP_CONTENT);
+        View focus = null;
+        LinearLayout line = null;
+        for (int i = 0; i < keys.size(); i++) {
+            if (i % columns == 0) {
+                line = new LinearLayout(activity);
+                line.setOrientation(LinearLayout.HORIZONTAL);
+                box.addView(line);
+            }
+            String key = keys.get(i);
+            boolean isCurrent = key.equals(current);
+            LinearLayout cell = new LinearLayout(activity);
+            cell.setOrientation(LinearLayout.VERTICAL);
+            cell.setGravity(Gravity.CENTER);
+            cell.setPadding(dp(6), dp(8), dp(6), dp(6));
+            cell.setFocusable(true);
+            cell.setFocusableInTouchMode(true);
+            cell.setClickable(true);
+            String name = iconName(key, fallback);
+            cell.setContentDescription(name);
+            cell.setBackground(iconCell(false, isCurrent));
+            ImageView badge = new ImageView(activity);
+            badge.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            badge.setImageDrawable(InputIcons.drawable(activity, key, fallback));
+            badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            cell.addView(badge, new LinearLayout.LayoutParams(dp(72), dp(34)));
+            TextView caption = text(name, 11, 0xCCFFFFFF);
+            caption.setSingleLine(true);
+            caption.setEllipsize(TextUtils.TruncateAt.END);
+            caption.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams captionParams = new LinearLayout.LayoutParams(-1, -2);
+            captionParams.topMargin = dp(6);
+            cell.addView(caption, captionParams);
+            cell.setOnFocusChangeListener((v, focused) -> v.setBackground(iconCell(focused, isCurrent)));
+            cell.setOnClickListener(v -> {
+                dismissActions();
+                saveTile(tile.withIcon(key));
+            });
+            LinearLayout.LayoutParams cellParams = new LinearLayout.LayoutParams(dp(96), dp(78));
+            cellParams.setMargins(dp(3), dp(3), dp(3), dp(3));
+            line.addView(cell, cellParams);
+            if (focus == null || isCurrent) focus = cell;
+        }
+        TextView hint = text(activity.getString(R.string.input_icon_own), 11, 0x80FFFFFF);
+        hint.setPadding(dp(6), dp(10), dp(6), 0);
+        box.addView(hint);
+        picker.showAtLocation(activity.getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        if (focus != null) focus.requestFocus();
     }
 
     private TextView text(String value, int size, int color) {
@@ -665,6 +1232,7 @@ final class AppLibraryDialog {
             });
             holder.itemView.setOnKeyListener((v, key, event) -> {
                 int index = holder.getBindingAdapterPosition();
+                if (event.getAction() == KeyEvent.ACTION_DOWN && key == KeyEvent.KEYCODE_DPAD_DOWN && focusInputs()) return true;
                 return event.getAction() == KeyEvent.ACTION_DOWN && (key == KeyEvent.KEYCODE_DPAD_UP
                         || key == KeyEvent.KEYCODE_DPAD_DOWN
                         || (rtl ? key == KeyEvent.KEYCODE_DPAD_RIGHT : key == KeyEvent.KEYCODE_DPAD_LEFT) && index == 0

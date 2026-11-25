@@ -16,6 +16,9 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.SoundEffectConstants;
@@ -75,6 +78,11 @@ final class EpisodesPanel {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final List<EpisodeRows.Line> shown = new ArrayList<>();
+    /** episodes_pills: one equal-width pill per episode, no heading; the focused one's details in {@link #detail}. */
+    private final boolean pills;
+    private final TextView detail;
+    /** episodes_pills: three episodes and "+N more" at most. */
+    private static final int MAX_PILLS = 4;
 
     private EpisodeRows.Snapshot snapshot;
     private boolean loaded;
@@ -97,13 +105,44 @@ final class EpisodesPanel {
      * @param backing a dark backing behind the panel (daily_wallpaper on). It reaches 6dp past the text on every
      *                side, so the text stays where it is without one.
      */
-    EpisodesPanel(Activity activity, FrameLayout root, View before, Host host, boolean stillLoader, boolean backing) {
+    EpisodesPanel(Activity activity, FrameLayout root, View before, Host host, boolean stillLoader, boolean backing,
+                  boolean pills) {
         this.activity = activity;
         this.host = host;
         this.root = root;
+        this.pills = pills;
         density = activity.getResources().getDisplayMetrics().density;
         panel = LayoutInflater.from(activity).inflate(R.layout.episodes_panel, root, false);
-        if (backing) {
+        if (pills) {
+            // Right under the top bar's pills, their right edges in line; the pills carry their own fill.
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) panel.getLayoutParams();
+            lp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            lp.topMargin = (int) (104 * density);
+            lp.rightMargin = (int) (57 * density);
+            ((LinearLayout) panel).setGravity(Gravity.END);
+            panel.findViewById(R.id.episodesHeader).setVisibility(View.GONE);
+            ((ViewGroup) panel).getChildAt(1).setVisibility(View.GONE);   // the heading's rule
+            View list = panel.findViewById(R.id.episodesRows);
+            LinearLayout.LayoutParams listLp = (LinearLayout.LayoutParams) list.getLayoutParams();
+            listLp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            listLp.topMargin = 0;
+            detail = new TextView(activity);
+            detail.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+            detail.setTextColor(0xD9FFFFFF);
+            detail.setShadowLayer(4 * density, 0, density, 0xCC000000);
+            detail.setSingleLine(true);
+            detail.setEllipsize(TextUtils.TruncateAt.END);
+            detail.setMaxWidth((int) (420 * density));
+            detail.setVisibility(View.INVISIBLE);
+            LinearLayout.LayoutParams detailLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            detailLp.topMargin = (int) (8 * density);
+            detailLp.rightMargin = (int) (16 * density);
+            ((LinearLayout) panel).addView(detail, detailLp);
+        } else {
+            detail = null;
+        }
+        if (backing && !pills) {
             int pad = (int) (6 * density);
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) panel.getLayoutParams();
             lp.width += 2 * pad;
@@ -216,6 +255,13 @@ final class EpisodesPanel {
     }
 
     private int capacity() {
+        if (pills) {
+            if (dockTop < 0) return MAX_PILLS;
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) panel.getLayoutParams();
+            // Each pill with its gap, and the detail line under them.
+            int room = dockTop - lp.topMargin - (int) (30 * density);
+            return Math.max(1, Math.min(MAX_PILLS, room / (int) (44 * density)));
+        }
         if (dockTop < 0) return EpisodeRows.MAX_ROWS;
         if (rowsTop < 0) {
             View header = panel.findViewById(R.id.episodesHeader);
@@ -266,7 +312,7 @@ final class EpisodesPanel {
     private void bind(List<EpisodeRows.Line> lines, int focused) {
         LayoutInflater inflater = LayoutInflater.from(activity);
         while (rows.getChildCount() < lines.size()) {
-            View row = inflater.inflate(R.layout.episodes_row, rows, false);
+            View row = inflater.inflate(pills ? R.layout.episodes_pill : R.layout.episodes_row, rows, false);
             int index = rows.getChildCount();
             row.setOnClickListener(v -> open(index));
             row.setOnKeyListener((v, keyCode, event) -> onRowKey(index, keyCode, event));
@@ -293,9 +339,10 @@ final class EpisodesPanel {
             name.setText(line.text);
             name.setTextColor(activity.getColorStateList(line.kind == EpisodeRows.Kind.EPISODE
                     || line.kind == EpisodeRows.Kind.SETUP ? R.color.episodes_name : R.color.episodes_dim));
-            code.setText(line.code);
-            code.setVisibility(line.code.isEmpty() ? View.GONE : View.VISIBLE);
-            day.setText(line.day);
+            String codeText = pills ? EpisodeRows.pillCode(line) : line.code;
+            code.setText(codeText);
+            code.setVisibility(codeText.isEmpty() ? View.GONE : View.VISIBLE);
+            day.setText(pills && !line.day.isEmpty() ? EpisodeRows.PILL_DOT + line.day : line.day);
             day.setVisibility(line.day.isEmpty() ? View.GONE : View.VISIBLE);
             day.setTextColor(activity.getColorStateList(line.soon ? R.color.episodes_dim : R.color.episodes_day));
             boolean focusable = line.focusable();
@@ -305,7 +352,34 @@ final class EpisodesPanel {
             }
             row.setFocusable(focusable);
         }
+        if (pills) evenWidths();
         if (focused >= 0 && focused < lines.size() && rows.getChildAt(focused).isFocused()) onRowFocused(focused);
+    }
+
+    /** episodes_pills: every pill as wide as the widest; the name then takes what is left, the code and day sit right. */
+    private void evenWidths() {
+        int widest = 0;
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View row = rows.getChildAt(i);
+            LinearLayout.LayoutParams nameLp = (LinearLayout.LayoutParams) row.findViewById(R.id.epName).getLayoutParams();
+            nameLp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            nameLp.weight = 0;
+            row.getLayoutParams().width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            // At the pill's own height: a measure left at its text's height is what a later frame may draw with.
+            row.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    View.MeasureSpec.makeMeasureSpec(row.getLayoutParams().height, View.MeasureSpec.EXACTLY));
+            widest = Math.max(widest, row.getMeasuredWidth());
+        }
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View row = rows.getChildAt(i);
+            LinearLayout.LayoutParams nameLp = (LinearLayout.LayoutParams) row.findViewById(R.id.epName).getLayoutParams();
+            nameLp.width = 0;
+            nameLp.weight = 1;
+            row.getLayoutParams().width = widest;
+            row.requestLayout();
+        }
+        // render() can run inside Home's layout pass, where requestLayout waits: ask again after it.
+        rows.post(rows::requestLayout);
     }
 
     /** Where the rows' text starts, from the layout's numbers: right after it turns visible it has no position yet. */
@@ -349,7 +423,10 @@ final class EpisodesPanel {
 
     /** From Home's global focus listener. */
     void onFocusChanged(View oldFocus, View newFocus) {
-        if (isRow(oldFocus) && !isRow(newFocus)) host.onRowsLeft();
+        if (isRow(oldFocus) && !isRow(newFocus)) {
+            if (detail != null) detail.setVisibility(View.INVISIBLE);
+            host.onRowsLeft();
+        }
     }
 
     private int focusedRow() {
@@ -397,6 +474,12 @@ final class EpisodesPanel {
     private void onRowFocused(int index) {
         if (index >= shown.size()) return;
         EpisodeRows.Line line = shown.get(index);
+        if (detail != null) {
+            detail.setText(line.kind == EpisodeRows.Kind.EPISODE ? EpisodeRows.subtitle(line.episode)
+                    : line.kind == EpisodeRows.Kind.MORE ? "Every new episode, in the New Episodes app"
+                    : "Opens the New Episodes app");
+            detail.setVisibility(View.VISIBLE);
+        }
         if (line.kind == EpisodeRows.Kind.EPISODE) host.onRowFocused(line.episode.name, EpisodeRows.subtitle(line.episode));
         else host.onRowFocused("New Episodes", line.kind == EpisodeRows.Kind.MORE ? "Every new episode, in the New Episodes app"
                 : "Opens the New Episodes app");

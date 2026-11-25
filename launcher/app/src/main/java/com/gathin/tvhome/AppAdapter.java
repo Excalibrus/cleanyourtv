@@ -61,10 +61,14 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         /** Hold OK on a tile: the activity shows the tile menu (move, remove from Home, app info). */
         void onTileLongPress(int position, View card);
         void onLibraryUp();
+        /** pinned_row: a D-pad key on the Apps tile at the end of the row. True when handled. */
+        boolean onAppsTileKey(int keyCode);
+        /** input_tiles: OK on an input tile; the activity switches to the input. */
+        void onInputTileOpen(String inputId);
     }
 
     static final class Entry {
-        static final int APP = 0, HOME_SETTINGS = 1, CARD = 2, EMPTY = 3;
+        static final int APP = 0, HOME_SETTINGS = 1, CARD = 2, EMPTY = 3, INPUT = 4;
 
         final int kind;
         final String label;
@@ -78,6 +82,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         int ambient;
         /** uniform_tiles card fill, top and bottom colour; null until sampled from the icon. */
         int[] backdrop;
+        /** input_tiles: the input an INPUT tile switches to. */
+        String inputId;
 
         Entry(String label, ComponentName component, Drawable banner, Drawable icon) {
             this(APP, label, component, banner, icon, null, 0);
@@ -184,6 +190,12 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private final boolean dockRow;
     /** config single_row: tiles sit in one sideways row, each as wide as a grid column would be. */
     private final boolean singleRow;
+    /** pinned_row: only the pinned apps, tiles close together, the library as an Apps tile at the row's end. */
+    private final boolean pinnedRow;
+    /** input_tiles: the input tiles put on Home join the apps. */
+    private final boolean inputTiles;
+    /** pinned_row: the tiles' width in dp (pinned_tile_width). */
+    private final int pinnedTileWidth;
     /** config strip_row: the apps after the dock are smaller tiles, stripColumns across, in a row of their own. */
     private final boolean stripRow;
     private final int stripColumns;
@@ -239,6 +251,9 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.dockTitle = cfg.dockTitle;
         this.dockRow = cfg.dockRow;
         this.singleRow = cfg.singleRow;
+        this.pinnedRow = cfg.pinnedRow;
+        this.inputTiles = cfg.inputTiles;
+        this.pinnedTileWidth = cfg.pinnedTileWidth;
         this.stripRow = cfg.stripRow;
         this.stripColumns = cfg.stripColumns;
         this.restNameAlpha = cfg.alwaysShowNames ? 0.75f : 0f;
@@ -287,7 +302,8 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             if (ri.activityInfo == null) continue;
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(ctx.getPackageName()) || !ri.activityInfo.exported
-                    || !LibraryApps.visible(tvPackages.contains(pkg), hidden.contains(pkg), added.contains(pkg), removed.contains(pkg))) continue;
+                    || !(pinnedRow ? LibraryApps.pinned(favourites.contains(pkg), added.contains(pkg), removed.contains(pkg))
+                    : LibraryApps.visible(tvPackages.contains(pkg), hidden.contains(pkg), added.contains(pkg), removed.contains(pkg)))) continue;
             ComponentName component = new ComponentName(pkg, ri.activityInfo.name);
             Cards.Card card = cardByPkg.get(pkg);
             if (card != null && !card.component.equals(component)) continue;   // the card stands in for this tile
@@ -309,6 +325,16 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 fresh.add(new Entry(Entry.CARD, label, component, banner, icon, card.caption, card.accent));
             } else {
                 fresh.add(new Entry(label, component, banner, icon));
+            }
+        }
+        if (inputTiles) {
+            for (InputTiles.Tile t : InputTiles.load(ctx)) {
+                if (!t.home) continue;
+                String label = t.title.isEmpty() ? t.caption : t.title;
+                Entry entry = new Entry(Entry.INPUT, label, t.component(), new InputIcons.TileBanner(ctx, t, InputIcons.HDMI),
+                        null, t.title.isEmpty() || t.caption.isEmpty() ? null : t.caption, 0);
+                entry.inputId = t.inputId;
+                fresh.add(entry);
             }
         }
         Collections.sort(fresh, (a, b) -> {
@@ -378,6 +404,42 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         return width <= 0 || height <= 0 || width >= height * 1.4f;
     }
 
+    /** pinned_row: the tile width, no wider than pinned_tile_width. */
+    static int pinnedWidthPx(int tileWidthPx, int widthDp, float density) {
+        return Math.min(tileWidthPx, Math.round(widthDp * density));
+    }
+
+    /** pinned_row: a tile's cell, room for the focus zoom plus a 16dp gap, so the row's tiles sit close together. */
+    static int pinnedCellPx(int tileWidthPx, float density) {
+        return Math.round(tileWidthPx * FOCUS_SCALE + 16 * density);
+    }
+
+    /**
+     * pinned_row: the App library as a square tile after the last app, as tall as the tiles and in the top bar's pill
+     * style. Its id is btnLibrary, so Home focuses it like the library pill.
+     */
+    private RecyclerView.ViewHolder appsTile(ViewGroup parent) {
+        View item = LayoutInflater.from(ctx).inflate(R.layout.item_apps_tile, parent, false);
+        float density = parent.getResources().getDisplayMetrics().density;
+        int width = parent.getWidth() > 0 ? parent.getWidth() : parent.getMeasuredWidth();
+        int inner = width - parent.getPaddingLeft() - parent.getPaddingRight();
+        int h = tileHeightPx(pinnedWidthPx(tileWidthPx(inner, parent.getHeight(), dockSize, rowsBelowDock, dockTitle,
+                dockRow, density), pinnedTileWidth, density));
+        View button = item.findViewById(R.id.btnLibrary);
+        ViewGroup.LayoutParams lp = button.getLayoutParams();
+        lp.width = h;
+        lp.height = h;
+        button.setLayoutParams(lp);
+        item.getLayoutParams().width = Math.round(h + 16 * density);
+        button.setOnClickListener(v -> listener.onLibraryRequested());
+        button.setOnFocusChangeListener((v, focused) -> { if (focused) listener.onLibraryFocused(); });
+        button.setOnKeyListener((v, key, event) -> event.getAction() == KeyEvent.ACTION_DOWN
+                && (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN
+                || key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT)
+                && listener.onAppsTileKey(key));
+        return new RecyclerView.ViewHolder(item) { };
+    }
+
     /** Lets go of every tile and its artwork (Home is in the background and memory is short). */
     void clear() {
         items.clear();
@@ -387,6 +449,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == 1 && pinnedRow) return appsTile(parent);
         if (viewType == 1) {
             View row = LayoutInflater.from(ctx).inflate(R.layout.row_app_library, parent, false);
             View button = row.findViewById(R.id.btnLibrary);
@@ -407,6 +470,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         // strip_row: a tile after the dock is a strip column wide, whatever the dock's size.
         int w = viewType == STRIP_TILE ? tileWidthPx(inner, stripColumns, density)
                 : tileWidthPx(inner, parent.getHeight(), dockSize, rowsBelowDock, dockTitle, dockRow, density);
+        if (pinnedRow) w = pinnedWidthPx(w, pinnedTileWidth, density);
         int h = tileHeightPx(w);
         View card = v.findViewById(R.id.card);
         ViewGroup.LayoutParams cardLp = card.getLayoutParams();
@@ -425,7 +489,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
         name.setLayoutParams(nameLp);
         // A sideways row would stretch a match_parent item across the whole screen: give it a grid column's width.
-        if (singleRow) v.getLayoutParams().width = inner / dockSize;
+        if (singleRow) v.getLayoutParams().width = pinnedRow ? pinnedCellPx(w, density) : inner / dockSize;
         if (uniformTiles) {
             // tvOS-style tile: a large centred mark, no caption inside the card.
             View icon = v.findViewById(R.id.icon);
@@ -517,6 +581,10 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     /** Opens the tile's activity by explicit component, with no extras: a card can name nothing else. */
     private void launch(Entry e) {
+        if (e.kind == Entry.INPUT) {
+            listener.onInputTileOpen(e.inputId);
+            return;
+        }
         if (e.kind == Entry.HOME_SETTINGS) {
             ctx.startActivity(new Intent(ctx, HomeSettingsActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
