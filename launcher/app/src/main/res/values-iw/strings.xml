@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">בית</string>
+    <string name="app_name">Tedi Launcher</string>
     <string name="inputs">כניסות</string>
     <string name="wifi">Wi-Fi</string>
     <string name="settings">הגדרות</string>
@@ -146,4 +146,18 @@
     <string name="race_countdown_hours">%1$d שע׳ %2$d דק׳</string>
     <string name="race_countdown_days">%1$d ימ׳ %2$d שע׳</string>
     <string name="last_opened">פתיחה אחרונה: %1$s</string>
+    <string name="input_tile_new">אריח כניסה</string>
+    <string name="input_tile_edit">עריכה</string>
+    <string name="input_tile_delete">מחיקת אריח</string>
+    <string name="input_tile_input">כניסה</string>
+    <string name="input_tile_title">כותרת</string>
+    <string name="input_tile_caption">כיתוב</string>
+    <string name="input_tile_icon">סמל</string>
+    <string name="input_tile_on_home">במסך הבית</string>
+    <string name="input_tile_yes">כן</string>
+    <string name="input_tile_no">לא</string>
+    <string name="input_tile_done">סיום</string>
+    <string name="input_tile_none">ללא</string>
+    <string name="input_icon_title">בחירת סמל</string>
+    <string name="input_icon_own">התמונות שלך, מ-Android/data/com.gathin.tvhome/files/input-icons</string>
 </resources>

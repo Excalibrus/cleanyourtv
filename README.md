@@ -1,3 +1,19 @@
+> [!NOTE]
+> **This fork is Tedi Launcher**: [CleanYourTV](https://github.com/Gathin23/cleanyourtv) with a reworked Home. Clean
+> the TV exactly as below with [PROMPT.md](PROMPT.md); the launcher it installs is this one. On top of the original:
+>
+> - **One low row** of tiles ending in an Apps tile (`pinned_row`), with Home drawn a little smaller (`ui_scale`).
+> - **Input tiles**: an HDMI or AV input dressed as a tile with a title, an icon (TV providers, consoles, PC, or your
+>   own picture) and a caption, made in the App library's Inputs row and put on Home (`input_tiles`).
+> - **Icon-only top bar**: Inputs, Bluetooth, Wi-Fi and Settings as round buttons (`top_bar_icons`).
+> - **Add-ons**: [Bluetooth Connect](addons/bluetooth-connect/) for speakers and headphones,
+>   [Daily Wallpaper](addons/daily-wallpaper/) (Bing's picture of the day) and [New Episodes](addons/new-episodes/)
+>   (new episodes of your Stremio series on Home). Install them before the launcher, from the same computer.
+>
+> `launcher/app/src/main/res/values/config.xml` is set up for a Sony BRAVIA; for another TV, put that TV's dock apps,
+> hidden apps and Live TV app in a theme `config.json` ([themes/README.md](themes/README.md)) and push it with
+> `tools/theme.sh`. Every switch is described in `config.xml` and in the themes README.
+
 <p align="center">
   <a href="https://cleanyour.tv"><img src="https://raw.githubusercontent.com/Gathin23/cleanyourtv/main/docs/banner.png" alt="CleanYourTV. Your TV, minus the ads. Strip the bloatware from any Android TV or Google TV over Wi-Fi and replace the ad-filled home screen with a clean launcher that looks like an Apple TV. No root, no cable, nothing uninstalled, and a one-line restore." width="800"></a>
 </p>

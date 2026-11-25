@@ -58,3 +58,9 @@ fits the rules; keys from before the rule sit on its wanted list until a screens
 | `strip_columns` | <img src="../addons/new-episodes/screenshot.jpg" width="320" alt="strip_columns on a TV"> |
 | `episodes_panel` | <img src="../addons/new-episodes/screenshot.jpg" width="320" alt="episodes_panel on a TV"> |
 | `daily_wallpaper` | <img src="../addons/daily-wallpaper/screenshot.jpg" width="320" alt="daily_wallpaper on a TV"> |
+| `top_bar_icons` | <img src="switches/top_bar_icons.jpg" width="320" alt="top_bar_icons on a TV"> |
+| `episodes_pills` | <img src="switches/top_bar_icons.jpg" width="320" alt="episodes_pills on a TV"> |
+| `pinned_row` | <img src="switches/top_bar_icons.jpg" width="320" alt="pinned_row on a TV"> |
+| `pinned_tile_width` | <img src="switches/top_bar_icons.jpg" width="320" alt="pinned_tile_width on a TV"> |
+| `ui_scale` | <img src="switches/top_bar_icons.jpg" width="320" alt="ui_scale on a TV"> |
+| `input_tiles` | <img src="switches/input_tiles.jpg" width="320" alt="input_tiles on a TV"> |
